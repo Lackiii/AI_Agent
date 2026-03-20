@@ -40,10 +40,14 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "antd": "^6.3.3",
     "dotenv": "^17.3.1",
     "electron-squirrel-startup": "^1.0.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.13.1"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.13.1",
+    "remark-gfm": "^4.0.1"
   }
 }

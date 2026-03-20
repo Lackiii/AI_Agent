@@ -1,0 +1,50 @@
+# 前端界面（Renderer）：改什么、去哪改
+
+界面是 **React 19 + TypeScript + react-router-dom（Hash 路由）+ Ant Design 6**。
+
+## 入口与路由
+
+| 文件 | 作用 |
+| --- | --- |
+| `index.html` | 挂载点 `#app`，脚本入口 `/src/renderer/main.tsx` |
+| `src/renderer/main.tsx` | `createRoot`、`HashRouter`、包一层 `AppTheme`（Ant Design） |
+| `src/renderer/App.tsx` | `Routes`：各页面路径与 `AppShell` 布局 |
+| `vite.renderer.config.ts` | Vite + `@vitejs/plugin-react`；一般只加别名或代理时改 |
+
+### 新增一个页面（示例）
+
+1. 在 `src/renderer/features/<名字>/` 新建 `XxxPage.tsx`（导出一个组件）。
+2. 在 `App.tsx` 里加一条：`<Route path="/page/xxx" element={<XxxPage />} />`。
+3. 在 `layout/AppShell.tsx` 的 `Menu` `items` 里加一项，`key` 与 path 一致，`onClick` 会 `navigate(key)`。
+
+路由使用 **Hash**（`#/page/...`），方便 Electron `file://` 打包后也能跳转。
+
+## 布局与主题（Ant Design）
+
+| 文件 | 作用 | 常见修改 |
+| --- | --- | --- |
+| `src/renderer/providers/AppTheme.tsx` | `ConfigProvider`（中文 `locale`）、`theme.token` / `components` | 主色、圆角、紧凑算法、暗色可换 `theme.darkAlgorithm` |
+| `src/renderer/layout/AppShell.tsx` | 左侧 `Layout.Sider` + `Menu`，右侧 `Outlet` | 改导航文案、图标、侧栏宽度 |
+| `src/renderer/index.css` | 全局极少样式（根节点高度等） | 大面积样式优先用 antd `token` 或组件 `style` |
+
+Ant Design 文档索引见仓库内 [llms.txt](./llms.txt)。
+
+## 各功能页
+
+| 路径 | 文件 | 说明 |
+| --- | --- | --- |
+| `/page/home` | `features/home/HomePage.tsx` | 首页欢迎与入口按钮 |
+| `/page/chat` | `features/chat/ChatPage.tsx` | 对话输入、调用 `assistantApi.llm.chat`、清空记忆按钮；回复区用 `components/MarkdownContent.tsx`（react-markdown + remark-gfm + antd Typography / theme token） |
+| `/page/reminders` | `features/reminders/RemindersPage.tsx` | 提醒列表与表单 |
+| `/page/screenshots` | `features/screenshots/ScreenshotsPage.tsx` | 截图轨迹占位 |
+
+改**文案、按钮、表单字段**：直接改对应 `*Page.tsx`。
+
+## 类型与全局 API
+
+- 前端调用 `window.assistantApi` 的类型在 **`src/types/global.d.ts`**。  
+  若在 preload 里加了新方法，这里要同步声明，否则 TS 报错。
+
+## 遗留文件说明
+
+若仍存在 **`src/pages/chat.tsx`**（旧版单文件页面），当前路由**不会**使用它，可删除以免混淆。以 `src/renderer/features/chat/ChatPage.tsx` 为准。

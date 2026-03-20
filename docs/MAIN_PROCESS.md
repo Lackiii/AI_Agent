@@ -19,9 +19,9 @@
 | `src/main-process/memory.service.ts` | 对话轮次写入 `userData/conversation-memory.json` | 改保存条数上限、文件格式 |
 | `src/main-process/persona-memory.service.ts` | 人设覆盖文件 `assistant-persona.json` | 改文件名、是否与默认人设合并而非覆盖 |
 | `src/main-process/persona-extract.service.ts` | 用 LLM 从用户话里抽「新人设」 | 改触发关键词、system 提示词、JSON 字段 |
-| `src/main-process/reminder.service.ts` | 提醒 CRUD → `reminders.json` | 改存储结构、以后换 SQLite 可整文件替换实现 |
+| `src/main-process/reminder.service.ts` | 提醒 CRUD → `reminders.json`（同时 best-effort 同步后端） | 改存储结构、以后换 SQLite 可整文件替换实现 |
 | `src/main-process/reminder-extract.service.ts` | 从对话抽提醒并自动创建 | 改关键词、抽取提示词 |
-| `src/main-process/screenshot.service.ts` | 截图列表占位 | 接 `desktopCapturer`、写磁盘、调 OCR |
+| `src/main-process/screenshot.service.ts` | 截图列表接口化（优先读后端） | 接 `desktopCapturer`、写磁盘、调 OCR |
 
 ## IPC 汇总与对话流水线
 

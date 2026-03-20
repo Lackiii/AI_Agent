@@ -18,7 +18,7 @@ export const HomePage = () => {
         </Paragraph>
       </div>
 
-      <Card bordered={false} styles={{ body: { padding: 24 } }}>
+      <Card bordered={false} styles={{ body: { padding: 24,  height: '100%'}}}>
         <Space direction="vertical" size="middle" style={{ width: '100%', textAlign: 'center' }}>
           <Text type="secondary">今天怎么样？</Text>
           <Button type="primary" size="large" icon={<ArrowRightOutlined />} onClick={() => navigate('/page/chat')}>

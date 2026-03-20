@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 智能对话 + 记忆 | `src/main-process/memory.service.ts`、`ipc/register.ts`（`llm:chat`） | **人设**：默认 `src/config/persona.ts`；用户可在对话中描述人设，经 `persona-extract.service.ts` 解析后写入 `userData/assistant-persona.json`，由 `persona-memory.service.ts` 覆盖默认。对话轮次记忆存 `conversation-memory.json`。 |
 | 提醒记录 | `src/main-process/reminder.service.ts`、`reminder:*` IPC | 本地 `userData/reminders.json`，前端 `src/renderer/features/reminders/`。对话中含「提醒」等关键词时，主进程会通过 `reminder-extract.service.ts` 调用 LLM 抽取事项与时间并自动 `createReminder`。 |
-| 定时截图 + OCR + 轨迹检索 | `src/main-process/screenshot.service.ts`、`screenshot:list` IPC | 现为占位；后续可接 `desktopCapturer`、文件落盘、OCR 服务。 |
+| 定时截图 + OCR + 轨迹检索 | `src/main-process/screenshot.service.ts`、`screenshot:list` IPC | 已对接后端 `GET /screenshots` 与 `POST /screenshots/ocr`；采集链路（`desktopCapturer`/定时采集）待你确认截图方法后补齐。 |
 | 前端界面 | `src/renderer/` | React + TypeScript + `react-router-dom`（Hash 路由）+ **Ant Design**（`ConfigProvider` 主题、`Layout`/`Menu`/`Card` 等，见 `docs/llms.txt` 索引）。 |
 
 ## 目录结构（摘要）

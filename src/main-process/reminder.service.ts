@@ -4,6 +4,10 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { CreateReminderInput, Reminder } from '../shared/types/domain';
 
+const getBackendBaseUrl = (): string => {
+  return process.env.BACKEND_BASE_URL?.trim() || 'http://127.0.0.1:8000';
+};
+
 const getStorePath = (): string => {
   if (!app.isReady()) {
     throw new Error('Cannot access userData before app is ready.');
@@ -79,22 +83,71 @@ export const isDuplicateReminder = (input: CreateReminderInput): { duplicate: bo
   return { duplicate: false };
 };
 
-export const createReminder = (input: CreateReminderInput): Reminder => {
+export const createReminder = async (input: CreateReminderInput): Promise<Reminder> => {
   const store = readStore();
-  const now = new Date().toISOString();
-  const item: Reminder = {
+
+  const localNow = new Date().toISOString();
+  const localItem: Reminder = {
     id: randomUUID(),
     title: input.title.trim() || '未命名提醒',
     dueAt: input.dueAt,
     rawText: input.rawText,
-    createdAt: now,
+    createdAt: localNow,
   };
+
+  // Best-effort:让后端 APScheduler 存储并到点推送通知。
+  // 如果后端不可用，则仍保留本地提醒（至少 UI 可见）。
+  try {
+    const baseUrl = getBackendBaseUrl().replace(/\/$/, '');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${baseUrl}/reminders`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: localItem.title,
+        dueAt: localItem.dueAt,
+        rawText: localItem.rawText,
+      }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+
+    if (res.ok) {
+      const data = (await res.json()) as Partial<Reminder> & {
+        id?: string;
+        dueAt?: string;
+        rawText?: string;
+        createdAt?: string;
+      };
+      if (data.id && data.createdAt) {
+        localItem.id = data.id;
+        localItem.dueAt = data.dueAt;
+        localItem.rawText = data.rawText;
+        localItem.createdAt = data.createdAt;
+      }
+    }
+  } catch (e) {
+    console.warn('[reminders] backend create failed, fallback to local only:', e);
+  }
+
+  const item = localItem;
   store.items.push(item);
   writeStore(store);
   return item;
 };
 
-export const deleteReminder = (id: string): boolean => {
+export const deleteReminder = async (id: string): Promise<boolean> => {
+  // Best-effort 同步后端；失败不阻止本地删除。
+  try {
+    const baseUrl = getBackendBaseUrl().replace(/\/$/, '');
+    const res = await fetch(`${baseUrl}/reminders/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      // ignore
+    }
+  } catch {
+    // ignore
+  }
+
   const store = readStore();
   const before = store.items.length;
   store.items = store.items.filter((r) => r.id !== id);

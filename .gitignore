@@ -90,3 +90,8 @@ typings/
 
 # Electron-Forge
 out/
+
+# ---------------- Python / FastAPI backend ----------------
+backend_data/
+**/__pycache__/
+*.pyc

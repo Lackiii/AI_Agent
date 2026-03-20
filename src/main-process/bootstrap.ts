@@ -3,6 +3,7 @@ import started from 'electron-squirrel-startup';
 import { loadProjectEnvironment } from './env';
 import { registerIpcHandlers } from './ipc/register';
 import { createMainWindow } from './window';
+import { connectBackendReminderNotifications } from './backend-ws';
 
 /**
  * 环境加载失败不应阻止 IPC 注册，否则渲染进程会出现 “No handler registered”。
@@ -23,6 +24,7 @@ if (started) {
   app.whenReady().then(() => {
     bootstrapCore();
     createMainWindow();
+    connectBackendReminderNotifications();
   });
 }
 

@@ -1,7 +1,12 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { getEnvLoadReport } from '../env';
 import { chatCompletion, getLlmConfig } from '../llm.service';
-import { appendExchange, clearConversationMemory, getRecentConversation } from '../memory.service';
+import {
+  appendExchange,
+  clearConversationMemory,
+  getConversationHistory,
+  getRecentConversation,
+} from '../memory.service';
 import { extractPersonaFromNaturalLanguage, mightContainPersonaIntent } from '../persona-extract.service';
 import {
   clearPersonaOverride,
@@ -12,7 +17,10 @@ import {
 import { extractReminderFromNaturalLanguage, mightContainReminderIntent } from '../reminder-extract.service';
 import { createReminder, deleteReminder, isDuplicateReminder, listReminders } from '../reminder.service';
 import { listScreenshots } from '../screenshot.service';
+import { getGreetingSettings, setGreetingSettings } from '../greeting-settings.service';
+import { restartGreetingScheduler } from '../greeting-scheduler.service';
 import type { CreateReminderInput, ScreenshotListFilter } from '../../shared/types/domain';
+import type { GreetingSettingsDTO } from '../../shared/types/greeting';
 import type { ChatMessage } from '../../shared/types/llm';
 
 const MEMORY_WINDOW = 20;
@@ -135,12 +143,15 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
 export const registerIpcHandlers = (): void => {
   ipcMain.removeHandler('llm:chat');
   ipcMain.removeHandler('memory:clear');
+  ipcMain.removeHandler('memory:list');
   ipcMain.removeHandler('persona:reset');
   ipcMain.removeHandler('reminder:list');
   ipcMain.removeHandler('reminder:create');
   ipcMain.removeHandler('reminder:delete');
   ipcMain.removeHandler('screenshot:list');
   ipcMain.removeHandler('deepseek:chat');
+  ipcMain.removeHandler('greeting:getSettings');
+  ipcMain.removeHandler('greeting:setSettings');
 
   ipcMain.handle('llm:chat', handleLlmChat);
   ipcMain.handle('deepseek:chat', handleLlmChat);
@@ -149,6 +160,8 @@ export const registerIpcHandlers = (): void => {
     clearConversationMemory();
     return true;
   });
+
+  ipcMain.handle('memory:list', async () => getConversationHistory());
 
   ipcMain.handle('persona:reset', async () => {
     clearPersonaOverride();
@@ -167,5 +180,13 @@ export const registerIpcHandlers = (): void => {
 
   ipcMain.handle('screenshot:list', async (_event, filter?: ScreenshotListFilter) => {
     return listScreenshots(filter);
+  });
+
+  ipcMain.handle('greeting:getSettings', async () => getGreetingSettings());
+
+  ipcMain.handle('greeting:setSettings', async (_event, patch: Partial<GreetingSettingsDTO>) => {
+    const next = setGreetingSettings(patch);
+    restartGreetingScheduler();
+    return next;
   });
 };

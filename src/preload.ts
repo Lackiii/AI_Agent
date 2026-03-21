@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { CreateReminderInput, Reminder, ScreenshotListFilter, ScreenshotRecord } from './shared/types/domain';
+import type { GreetingSettingsDTO } from './shared/types/greeting';
+import type { ChatMessage } from './shared/types/llm';
 
 contextBridge.exposeInMainWorld('assistantApi', {
   llm: {
@@ -7,6 +9,7 @@ contextBridge.exposeInMainWorld('assistantApi', {
   },
   memory: {
     clear: () => ipcRenderer.invoke('memory:clear') as Promise<boolean>,
+    list: () => ipcRenderer.invoke('memory:list') as Promise<ChatMessage[]>,
   },
   persona: {
     reset: () => ipcRenderer.invoke('persona:reset') as Promise<boolean>,
@@ -20,6 +23,11 @@ contextBridge.exposeInMainWorld('assistantApi', {
   screenshots: {
     list: (filter?: ScreenshotListFilter) =>
       ipcRenderer.invoke('screenshot:list', filter) as Promise<ScreenshotRecord[]>,
+  },
+  greeting: {
+    getSettings: () => ipcRenderer.invoke('greeting:getSettings') as Promise<GreetingSettingsDTO>,
+    setSettings: (patch: Partial<GreetingSettingsDTO>) =>
+      ipcRenderer.invoke('greeting:setSettings', patch) as Promise<GreetingSettingsDTO>,
   },
 });
 

@@ -48,6 +48,12 @@ export const getRecentConversation = (limit: number): ChatMessage[] => {
   return messages.slice(-limit);
 };
 
+/** 全部已存对话轮次（仅 user / assistant，最多 MAX_STORED_MESSAGES 条） */
+export const getConversationHistory = (): ChatMessage[] => {
+  const { messages } = readFile();
+  return messages.slice();
+};
+
 export const appendExchange = (userText: string, assistantText: string): void => {
   const data = readFile();
   data.messages.push(

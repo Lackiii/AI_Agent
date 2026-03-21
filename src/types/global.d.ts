@@ -1,4 +1,6 @@
 import type { CreateReminderInput, Reminder, ScreenshotListFilter, ScreenshotRecord } from '../shared/types/domain';
+import type { GreetingSettingsDTO } from '../shared/types/greeting';
+import type { ChatMessage } from '../shared/types/llm';
 
 export {};
 
@@ -10,6 +12,7 @@ declare global {
       };
       memory: {
         clear: () => Promise<boolean>;
+        list: () => Promise<ChatMessage[]>;
       };
       persona: {
         reset: () => Promise<boolean>;
@@ -21,6 +24,10 @@ declare global {
       };
       screenshots: {
         list: (filter?: ScreenshotListFilter) => Promise<ScreenshotRecord[]>;
+      };
+      greeting: {
+        getSettings: () => Promise<GreetingSettingsDTO>;
+        setSettings: (patch: Partial<GreetingSettingsDTO>) => Promise<GreetingSettingsDTO>;
       };
     };
     /** @deprecated 请使用 assistantApi.llm.chat */

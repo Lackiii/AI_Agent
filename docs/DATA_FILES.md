@@ -16,6 +16,7 @@
 | `conversation-memory.json` | `memory.service.ts` | 最近若干轮 user/assistant 对话，用于上下文 | 可删 = 清空记忆；也可手改 JSON（不推荐） |
 | `assistant-persona.json` | `persona-memory.service.ts` | 对话里保存的人设覆盖，字段 `content` | 直接编辑 `content` 后重启应用；删文件 = 用默认 `persona.ts` |
 | `reminders.json` | `reminder.service.ts` | 提醒列表 | 可手改，注意 JSON 结构；更建议用界面或 IPC |
+| `greeting-settings.json` | `greeting-settings.service.ts` | 定时问候开关与间隔（`enabled`、`intervalMode`） | 侧栏「定时问候设置」抽屉会写；删文件 = 恢复默认（关闭、30 分钟档） |
 
 ## 与「代码里的默认」关系
 

@@ -46,5 +46,7 @@ src/
 
 - `llm:chat` / `deepseek:chat`：发送用户输入，返回模型回复（含记忆）。
 - `memory:clear`：清空本地对话记忆文件。
+- `memory:list`：只读列出 `conversation-memory.json` 中的 user/assistant 消息。
+- `greeting:getSettings` / `greeting:setSettings`：定时问候开关与间隔；主进程内调度，到点调 LLM 并 `Notification`。
 - `reminder:list` | `reminder:create` | `reminder:delete`
 - `screenshot:list`

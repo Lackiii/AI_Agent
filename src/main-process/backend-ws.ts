@@ -1,5 +1,6 @@
-import { Notification } from 'electron';
 import WebSocket from 'ws';
+import { showDesktopNotification } from './desktop-notification.service';
+import { appendNotificationTurn } from './memory.service';
 
 const getBackendBaseUrl = (): string => {
   return process.env.BACKEND_BASE_URL?.trim() || 'http://127.0.0.1:8000';
@@ -42,7 +43,8 @@ export const connectBackendReminderNotifications = (): void => {
           const dueAt = reminder.dueAt ? String(reminder.dueAt) : '';
           const body = dueAt ? `到点啦：${dueAt}` : '到点啦！';
 
-          new Notification({ title, body }).show();
+          appendNotificationTurn(body, title);
+          showDesktopNotification(title, body);
         } catch {
           // ignore
         }

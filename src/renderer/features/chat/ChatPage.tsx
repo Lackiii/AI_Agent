@@ -1,6 +1,6 @@
-import { ClearOutlined, SendOutlined } from '@ant-design/icons';
-import { App, Button, Card, Flex, Input, Space, Typography } from 'antd';
-import { useState } from 'react';
+import { ClearOutlined, FileSearchOutlined, SendOutlined } from '@ant-design/icons';
+import { App, Button, Card, Empty, Flex, Input, List, Modal, Space, Spin, Typography } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MarkdownContent } from '../../components/MarkdownContent';
 
@@ -12,6 +12,51 @@ export const ChatPage = () => {
   const [prompt, setPrompt] = useState('');
   const [result, setResult] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [vaultLoading, setVaultLoading] = useState(false);
+  const [vaultFiles, setVaultFiles] = useState<string[]>([]);
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewPath, setPreviewPath] = useState('');
+  const [previewContent, setPreviewContent] = useState('');
+
+  const loadVaultList = useCallback(async () => {
+    setVaultLoading(true);
+    try {
+      const files = await window.assistantApi.vault.list();
+      setVaultFiles(files);
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      message.error(`加载已存资料失败：${errMessage}`);
+    } finally {
+      setVaultLoading(false);
+    }
+  }, [message]);
+
+  useEffect(() => {
+    if (vaultOpen) {
+      void loadVaultList();
+    }
+  }, [vaultOpen, loadVaultList]);
+
+  const openVaultPreview = async (relPath: string) => {
+    setPreviewPath(relPath);
+    setPreviewContent('');
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    try {
+      const r = await window.assistantApi.vault.read(relPath);
+      setPreviewContent(r.content);
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      message.error(`读取失败：${errMessage}`);
+      setPreviewOpen(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const handleSend = async () => {
     const text = prompt.trim();
@@ -48,18 +93,18 @@ export const ChatPage = () => {
   };
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <div>
         <Title level={3} style={{ marginBottom: 8 }}>
           对话
         </Title>
         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          结合<strong>人设</strong>与本地短期记忆：用自然语言描述人设即可保存；说「恢复默认人设」等可还原。提醒可说「下午两点提醒我看书」。
+          结合<strong>人设</strong>与本地短期记忆：用自然语言描述人设即可保存；说「恢复默认人设」等可还原。提醒可说「下午两点提醒我看书」。可让助手把随笔存入资料夹（下方「查看已存资料」）。
         </Paragraph>
       </div>
 
-      <Card bordered={false} styles={{ body: { padding: 20 } }}>
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Card variant="borderless" styles={{ body: { padding: 20 } }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Input.TextArea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -74,6 +119,9 @@ export const ChatPage = () => {
           <Flex wrap="wrap" gap="small" justify="space-between">
             <Button onClick={() => navigate('/page/home')}>回首页</Button>
             <Space wrap>
+              <Button icon={<FileSearchOutlined />} onClick={() => setVaultOpen(true)}>
+                查看已存资料
+              </Button>
               <Button icon={<ClearOutlined />} onClick={() => void handleClearMemory()}>
                 清空记忆
               </Button>
@@ -93,7 +141,7 @@ export const ChatPage = () => {
       <Card
         size="small"
         title="回复"
-        bordered={false}
+        variant="borderless"
         styles={{
           body: {
             minHeight: 120,
@@ -104,6 +152,70 @@ export const ChatPage = () => {
       >
         {result ? <MarkdownContent source={result} /> : <Text type="secondary">尚无回复</Text>}
       </Card>
+
+      <Modal
+        title="已存储的资料（AI 资料夹）"
+        open={vaultOpen}
+        onCancel={() => setVaultOpen(false)}
+        footer={[
+          <Button key="refresh" onClick={() => void loadVaultList()} loading={vaultLoading}>
+            刷新
+          </Button>,
+          <Button key="close" type="primary" onClick={() => setVaultOpen(false)}>
+            关闭
+          </Button>,
+        ]}
+        width={520}
+        destroyOnClose
+      >
+        <Spin spinning={vaultLoading}>
+          {vaultFiles.length === 0 ? (
+            <Empty description="暂无文件，可在对话中让助手保存随笔" />
+          ) : (
+            <List
+              size="small"
+              dataSource={vaultFiles}
+              renderItem={(item) => (
+                <List.Item>
+                  <Button type="link" style={{ padding: 0, height: 'auto' }} onClick={() => void openVaultPreview(item)}>
+                    {item}
+                  </Button>
+                </List.Item>
+              )}
+            />
+          )}
+        </Spin>
+      </Modal>
+
+      <Modal
+        title={previewPath || '内容预览'}
+        open={previewOpen}
+        onCancel={() => setPreviewOpen(false)}
+        footer={
+          <Button type="primary" onClick={() => setPreviewOpen(false)}>
+            关闭
+          </Button>
+        }
+        width={720}
+        destroyOnClose
+        zIndex={1100}
+      >
+        <Spin spinning={previewLoading}>
+          <Paragraph
+            style={{
+              marginBottom: 0,
+              maxHeight: '60vh',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: 13,
+            }}
+          >
+            {previewContent || (previewLoading ? '' : '（空）')}
+          </Paragraph>
+        </Spin>
+      </Modal>
     </Space>
   );
 };

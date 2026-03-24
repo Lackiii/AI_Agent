@@ -50,7 +50,7 @@ export const RemindersPage = () => {
   };
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <div>
         <Title level={3} style={{ marginBottom: 8 }}>
           提醒
@@ -60,7 +60,7 @@ export const RemindersPage = () => {
         </Paragraph>
       </div>
 
-      <Card bordered={false} title="新建" styles={{ body: { paddingBottom: 8 } }}>
+      <Card variant="borderless" title="新建" styles={{ body: { paddingBottom: 8 } }}>
         <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
           <Form.Item name="title" label="内容" rules={[{ required: true, message: '请输入提醒内容' }]}>
             <Input placeholder="例如：下午开会" allowClear />
@@ -76,7 +76,7 @@ export const RemindersPage = () => {
         </Form>
       </Card>
 
-      <Card bordered={false} title="列表">
+      <Card variant="borderless" title="列表">
         <List
           locale={{ emptyText: '暂无提醒' }}
           dataSource={items}

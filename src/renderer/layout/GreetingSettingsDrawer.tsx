@@ -1,4 +1,4 @@
-import { Alert, App, Drawer, Radio, Space, Switch, Typography } from 'antd';
+import { Alert, App, Button, Drawer, Radio, Space, Switch, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import type { GreetingIntervalMode, GreetingSettingsDTO } from '../../shared/types/greeting';
 
@@ -21,6 +21,7 @@ export const GreetingSettingsDrawer = ({ open, onClose }: Props) => {
   const { message } = App.useApp();
   const [settings, setSettings] = useState<GreetingSettingsDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [testSending, setTestSending] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,20 +50,36 @@ export const GreetingSettingsDrawer = ({ open, onClose }: Props) => {
     }
   };
 
+  const sendTest = async () => {
+    setTestSending(true);
+    try {
+      const r = await window.assistantApi.greeting.sendTestNotification();
+      if (r.ok === false) {
+        message.error(r.error);
+        return;
+      }
+      message.success('已请求发送测试通知，请看屏幕右下角或通知中心');
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '发送失败');
+    } finally {
+      setTestSending(false);
+    }
+  };
+
   return (
     <Drawer
       title="定时问候"
       placement="right"
-      width={360}
+      size={360}
       onClose={onClose}
       open={open}
-      destroyOnClose={false}
+      destroyOnHidden={false}
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <Alert
           type="info"
           showIcon
-          message="关于 Token"
+          title="关于 Token"
           description="开启后，每到间隔会调用一次大模型生成问候，并弹出系统通知。关闭后不会请求模型。"
         />
 
@@ -90,7 +107,7 @@ export const GreetingSettingsDrawer = ({ open, onClose }: Props) => {
             disabled={settings === null}
             onChange={(e) => void persist({ intervalMode: e.target.value as GreetingIntervalMode })}
           >
-            <Space direction="vertical" size={10}>
+            <Space orientation="vertical" size={10}>
               {INTERVAL_OPTIONS.map((opt) => (
                 <Radio key={opt.value} value={opt.value}>
                   {opt.label}
@@ -99,6 +116,15 @@ export const GreetingSettingsDrawer = ({ open, onClose }: Props) => {
             </Space>
           </Radio.Group>
         </div>
+
+        <Space orientation="vertical">
+          <Text strong style={{ display: 'block', paddingBottom: 8 }}>
+            测试系统通知（本机通道）
+          </Text>
+          <Button loading={testSending} onClick={() => void sendTest()}>
+            立即发送测试通知
+          </Button>
+        </Space>
       </Space>
     </Drawer>
   );

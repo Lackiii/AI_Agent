@@ -17,7 +17,7 @@ export const ScreenshotsPage = () => {
   }, [refresh]);
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <div>
         <Title level={3} style={{ marginBottom: 8 }}>
           截图轨迹
@@ -27,7 +27,7 @@ export const ScreenshotsPage = () => {
         </Paragraph>
       </div>
 
-      <Card bordered={false}>
+      <Card variant="borderless">
         {rows.length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无截图记录" />
         ) : (

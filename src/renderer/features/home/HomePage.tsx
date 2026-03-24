@@ -8,7 +8,7 @@ export const HomePage = () => {
   const navigate = useNavigate();
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <div>
         <Title level={3} style={{ marginBottom: 8 }}>
           欢迎回来
@@ -18,8 +18,8 @@ export const HomePage = () => {
         </Paragraph>
       </div>
 
-      <Card bordered={false} styles={{ body: { padding: 24,  height: '100%'}}}>
-        <Space direction="vertical" size="middle" style={{ width: '100%', textAlign: 'center' }}>
+      <Card variant="borderless" styles={{ body: { padding: 24, height: '100%' } }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%', textAlign: 'center' }}>
           <Text type="secondary">今天怎么样？</Text>
           <Button type="primary" size="large" icon={<ArrowRightOutlined />} onClick={() => navigate('/page/chat')}>
             开始对话

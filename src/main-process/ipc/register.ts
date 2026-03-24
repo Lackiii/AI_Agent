@@ -1,12 +1,16 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { getEnvLoadReport } from '../env';
-import { chatCompletion, getLlmConfig } from '../llm.service';
+import { getVaultRootPath, vaultListFiles, vaultReadFile } from '../ai-vault.service';
+import { chatCompletionWithAssistantTools, getLlmConfig } from '../llm.service';
 import {
   appendExchange,
+  appendNotificationTurn,
   clearConversationMemory,
   getConversationHistory,
   getRecentConversation,
+  removeMessageById,
 } from '../memory.service';
+import { takePendingNotifications } from '../notification-memory-queue';
 import { extractPersonaFromNaturalLanguage, mightContainPersonaIntent } from '../persona-extract.service';
 import {
   clearPersonaOverride,
@@ -17,11 +21,14 @@ import {
 import { extractReminderFromNaturalLanguage, mightContainReminderIntent } from '../reminder-extract.service';
 import { createReminder, deleteReminder, isDuplicateReminder, listReminders } from '../reminder.service';
 import { listScreenshots } from '../screenshot.service';
+import { shouldDisableTimedGreeting } from '../greeting-intent-heuristic.service';
+import { notifyGreetingSettingsChange } from '../greeting-notification.service';
 import { getGreetingSettings, setGreetingSettings } from '../greeting-settings.service';
 import { restartGreetingScheduler } from '../greeting-scheduler.service';
 import type { CreateReminderInput, ScreenshotListFilter } from '../../shared/types/domain';
 import type { GreetingSettingsDTO } from '../../shared/types/greeting';
 import type { ChatMessage } from '../../shared/types/llm';
+import type { VaultReadResult } from '../../shared/types/vault';
 
 const MEMORY_WINDOW = 20;
 
@@ -45,6 +52,12 @@ const hourToChineseClock = (hour24: number): string => {
   return map[hour] ?? `${hour}点`;
 };
 
+const flushPendingNotificationsToMemory = (): void => {
+  for (const p of takePendingNotifications()) {
+    appendNotificationTurn(p.body, p.title || '拉文杜拉');
+  }
+};
+
 const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   const { apiKey } = getLlmConfig();
   if (!apiKey) {
@@ -57,6 +70,13 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   const trimmed = prompt.trim();
   if (!trimmed) {
     throw new Error('Empty prompt.');
+  }
+
+  let greetingFooter = '';
+  if (shouldDisableTimedGreeting(trimmed)) {
+    setGreetingSettings({ enabled: false });
+    restartGreetingScheduler();
+    greetingFooter = '\n\n—\n✓ 已关闭定时问候，好好休息，明天见～';
   }
 
   let personaFooter = '';
@@ -116,6 +136,14 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   const history = getRecentConversation(MEMORY_WINDOW);
   const messages: ChatMessage[] = [{ role: 'system', content: getEffectivePersona() }];
 
+  messages.push({
+    role: 'system',
+    content: `你拥有工具：
+1) vault_list / vault_read / vault_write：只能访问本机用户资料目录下的 AI 资料夹（其它路径一律不可用）。资料夹绝对路径：${getVaultRootPath()}。用户让你保存随笔/笔记/草稿时，必须用 vault_write 写入完整正文；未调用工具则视为未保存。
+2) notification_show：立刻弹出一条系统通知（Toast），且正文会写入对话记忆（用户可在「对话历史」看到），便于你记得自己刚通过弹窗说过什么。用户要求「马上/立即弹窗或通知测试」等必须调用；参数 body 为通知正文。
+3) greeting_update：控制「定时主动问候」（到点发系统通知、一两句关心话，用户未发消息也会触发）。用户希望每隔一段时间被提醒休息、喝水、陪聊、写代码间歇等，须调用本工具开启并设定间隔（如半小时用 interval_mode=30m，或 interval_minutes=30）；用户说下班、明天见、再见、不用提醒、关掉问候等，须设 enabled=false。若用户只是描述需求，你应在回复中确认已生效（并实际调用工具）。`,
+  });
+
   if (reminderOutcome === 'created') {
     messages.push({
       role: 'system',
@@ -128,13 +156,21 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
 
   // 仅在“重复/过时”场景短路，避免把固定文案夹杂进主回复里。
   if (reminderShouldShortReply) {
-    const finalReply = `${reminderActionText}${reminderSkipPersonaFooter ? '' : personaFooter}`;
+    const finalReply = `${reminderActionText}${reminderSkipPersonaFooter ? '' : personaFooter}${greetingFooter}`;
+    flushPendingNotificationsToMemory();
     appendExchange(trimmed, finalReply);
     return finalReply;
   }
 
-  const reply = await chatCompletion(messages);
-  const fullReply = `${reply}${reminderSkipPersonaFooter ? '' : personaFooter}${reminderActionText}`;
+  let reply: string;
+  try {
+    reply = await chatCompletionWithAssistantTools(messages);
+  } catch (e) {
+    takePendingNotifications();
+    throw e;
+  }
+  const fullReply = `${reply}${reminderSkipPersonaFooter ? '' : personaFooter}${reminderActionText}${greetingFooter}`;
+  flushPendingNotificationsToMemory();
   // 只把主回复写入记忆，避免把操作性 footer 反复带入上下文导致重复。
   appendExchange(trimmed, reply);
   return fullReply;
@@ -144,6 +180,7 @@ export const registerIpcHandlers = (): void => {
   ipcMain.removeHandler('llm:chat');
   ipcMain.removeHandler('memory:clear');
   ipcMain.removeHandler('memory:list');
+  ipcMain.removeHandler('memory:remove');
   ipcMain.removeHandler('persona:reset');
   ipcMain.removeHandler('reminder:list');
   ipcMain.removeHandler('reminder:create');
@@ -152,6 +189,8 @@ export const registerIpcHandlers = (): void => {
   ipcMain.removeHandler('deepseek:chat');
   ipcMain.removeHandler('greeting:getSettings');
   ipcMain.removeHandler('greeting:setSettings');
+  ipcMain.removeHandler('vault:list');
+  ipcMain.removeHandler('vault:read');
 
   ipcMain.handle('llm:chat', handleLlmChat);
   ipcMain.handle('deepseek:chat', handleLlmChat);
@@ -162,6 +201,8 @@ export const registerIpcHandlers = (): void => {
   });
 
   ipcMain.handle('memory:list', async () => getConversationHistory());
+
+  ipcMain.handle('memory:remove', async (_event, messageId: string) => removeMessageById(String(messageId ?? '')));
 
   ipcMain.handle('persona:reset', async () => {
     clearPersonaOverride();
@@ -185,8 +226,21 @@ export const registerIpcHandlers = (): void => {
   ipcMain.handle('greeting:getSettings', async () => getGreetingSettings());
 
   ipcMain.handle('greeting:setSettings', async (_event, patch: Partial<GreetingSettingsDTO>) => {
+    const prev = getGreetingSettings();
     const next = setGreetingSettings(patch);
+    notifyGreetingSettingsChange(prev, next);
     restartGreetingScheduler();
     return next;
+  });
+
+  ipcMain.handle('vault:list', async () => vaultListFiles());
+
+  ipcMain.handle('vault:read', async (_event, relativePath: string): Promise<VaultReadResult> => {
+    const p = String(relativePath ?? '').trim();
+    if (!p) {
+      throw new Error('路径为空');
+    }
+    const content = vaultReadFile(p);
+    return { path: p, content };
   });
 };

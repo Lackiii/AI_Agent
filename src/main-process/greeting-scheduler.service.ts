@@ -1,7 +1,8 @@
-import { Notification } from 'electron';
 import type { ChatMessage } from '../shared/types/llm';
 import type { GreetingIntervalMode } from '../shared/types/greeting';
+import { showDesktopNotification } from './desktop-notification.service';
 import { chatCompletion, getLlmConfig } from './llm.service';
+import { appendNotificationTurn } from './memory.service';
 import { getEffectivePersona } from './persona-memory.service';
 import { getGreetingSettings } from './greeting-settings.service';
 
@@ -49,13 +50,14 @@ const runGreeting = async (): Promise<void> => {
       {
         role: 'system',
         content:
-          '这是一次定时触发的主动问候（用户并未发送新消息）。请用一两句简短、自然的中文主动关心用户，符合你的人设；不要提起「定时」「系统」「任务」「触发」，不要要求用户写长回复。',
+          '这是一次定时触发的主动问候（用户并未发送新消息）。请用一两句简短、自然的中文关心对方，符合你的人设；可以像「姐姐，你已经工作半小时啦，喝杯茶休息一下吧」这类口吻（称呼按人设调整）。不要提起「定时」「系统」「任务」「触发」，不要要求用户写长回复。',
       },
       { role: 'user', content: '（请主动问候我）' },
     ];
     const reply = await chatCompletion(messages, { temperature: 0.85 });
     const body = (reply.trim() || '主人，在这儿陪着您呢。').slice(0, 280);
-    new Notification({ title: '拉文杜拉', body }).show();
+    appendNotificationTurn(body, '拉文杜拉');
+    showDesktopNotification('拉文杜拉', body);
   } catch (e) {
     console.error('[greeting-scheduler]', e);
   }

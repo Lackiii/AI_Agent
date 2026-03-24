@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron';
 import path from 'node:path';
+import { setDesktopNotificationWindow } from './desktop-notification.service';
 
 export const createMainWindow = (): BrowserWindow => {
   const mainWindow = new BrowserWindow({
@@ -19,5 +20,6 @@ export const createMainWindow = (): BrowserWindow => {
   }
 
   mainWindow.webContents.openDevTools();
+  setDesktopNotificationWindow(mainWindow);
   return mainWindow;
 };

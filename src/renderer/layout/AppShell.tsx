@@ -7,7 +7,7 @@ import {
   SmileOutlined,
 } from '@ant-design/icons';
 import { Button, Layout, Menu, Typography } from 'antd';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { GreetingSettingsDrawer } from './GreetingSettingsDrawer';
 
@@ -33,6 +33,13 @@ export const AppShell = () => {
     }
     return '/page/home';
   }, [location.pathname]);
+
+  useEffect(() => {
+    const off = window.assistantApi.navigation.onAppNavigate((path) => {
+      navigate(path);
+    });
+    return off;
+  }, [navigate]);
 
   return (
     <Layout

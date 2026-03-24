@@ -1,9 +1,10 @@
-import { ReloadOutlined } from '@ant-design/icons';
-import { App, Button, Card, List, Space, Tag, Typography } from 'antd';
+import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Card, Flex, List, Popconfirm, Space, Tag, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ChatMessage } from '../../../shared/types/llm';
 import { MarkdownContent } from '../../components/MarkdownContent';
+import './ChatHistoryPage.css';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -30,18 +31,36 @@ export const ChatHistoryPage = () => {
     void load();
   }, [load]);
 
+  const removeMessage = useCallback(
+    async (messageId: string) => {
+      try {
+        const ok = await window.assistantApi.memory.remove(messageId);
+        if (ok) {
+          message.success('已删除');
+          void load();
+        } else {
+          message.warning('未找到该条，可能已删除');
+          void load();
+        }
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : '删除失败');
+      }
+    },
+    [message, load],
+  );
+
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <div>
         <Title level={3} style={{ marginBottom: 8 }}>
           对话历史
         </Title>
         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          只读查看本地已保存的对话轮次（与「对话」页使用的记忆相同）。清空记忆请在对话页操作。
+          与「对话」页共用同一份本地记忆。可删除单条；桌面通知触发的内容会带「桌面通知」标记。清空全部请在对话页操作。
         </Paragraph>
       </div>
 
-      <Card bordered={false} styles={{ body: { padding: 20 } }}>
+      <Card variant="borderless" styles={{ body: { padding: 20 } }}>
         <Space style={{ marginBottom: 16 }}>
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
             刷新
@@ -56,14 +75,38 @@ export const ChatHistoryPage = () => {
             loading={loading}
             dataSource={rows}
             renderItem={(item, index) => (
-              <List.Item style={{ paddingLeft: 0, paddingRight: 0, borderBlockEnd: '1px solid #f0f0f0' }}>
+              <List.Item
+                key={item.id ?? index}
+                className="chat-history-list-item"
+                style={{ paddingLeft: 0, paddingRight: 0, borderBlockEnd: '1px solid #f0f0f0' }}
+              >
                 <div style={{ width: '100%' }}>
-                  <Space size="small" style={{ marginBottom: 8 }}>
-                    <Text type="secondary">#{index + 1}</Text>
-                    <Tag color={item.role === 'user' ? 'blue' : 'green'}>
-                      {item.role === 'user' ? '你' : '助手'}
-                    </Tag>
-                  </Space>
+                  <Flex justify="space-between" align="flex-start" gap={8}>
+                    <Space size="small" style={{ marginBottom: 8, flex: 1, minWidth: 0 }}>
+                      <Text type="secondary">#{index + 1}</Text>
+                      <Tag color={item.role === 'user' ? 'blue' : 'green'}>
+                        {item.role === 'user' ? '你' : '助手'}
+                      </Tag>
+                    </Space>
+                    {item.id ? (
+                      <span className="chat-history-delete-wrap" style={{ flexShrink: 0 }}>
+                        <Popconfirm
+                          title="从记忆中删除这一条？"
+                          okText="删除"
+                          cancelText="取消"
+                          onConfirm={() => void removeMessage(item.id as string)}
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            className="chat-history-delete-btn"
+                            aria-label="删除此条记忆"
+                            icon={<DeleteOutlined className="chat-history-delete-icon" />}
+                          />
+                        </Popconfirm>
+                      </span>
+                    ) : null}
+                  </Flex>
                   {item.role === 'assistant' ? (
                     <MarkdownContent source={item.content} />
                   ) : (

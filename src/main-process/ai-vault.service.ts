@@ -90,6 +90,15 @@ export const vaultWriteFile = (relativePath: string, content: string): void => {
   fs.writeFileSync(full, utf8, { encoding: 'utf8' });
 };
 
+export const vaultDeleteFile = (relativePath: string): void => {
+  ensureVaultDir();
+  const full = safeResolvedPath(relativePath);
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+    throw new Error('文件不存在');
+  }
+  fs.unlinkSync(full);
+};
+
 /** 供 LLM 工具调用：返回 JSON 字符串，便于作为 tool 消息 content */
 export const runVaultTool = (name: string, argsJson: string): string => {
   let args: Record<string, unknown>;
@@ -121,6 +130,14 @@ export const runVaultTool = (name: string, argsJson: string): string => {
         }
         vaultWriteFile(p, content);
         return JSON.stringify({ ok: true, path: p, bytes: Buffer.byteLength(content, 'utf8') });
+      }
+      case 'vault_delete': {
+        const p = String(args.path ?? '');
+        if (!p) {
+          return JSON.stringify({ ok: false, error: '缺少 path' });
+        }
+        vaultDeleteFile(p);
+        return JSON.stringify({ ok: true, path: p });
       }
       default:
         return JSON.stringify({ ok: false, error: `未知工具: ${name}` });

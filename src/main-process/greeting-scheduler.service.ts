@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../shared/types/llm';
 import type { GreetingIntervalMode } from '../shared/types/greeting';
+import { buildLocalDateTimeSystemMessage } from './datetime-context';
 import { showDesktopNotification } from './desktop-notification.service';
 import { chatCompletion, getLlmConfig } from './llm.service';
 import { appendNotificationTurn } from './memory.service';
@@ -47,6 +48,7 @@ const runGreeting = async (): Promise<void> => {
     const persona = getEffectivePersona();
     const messages: ChatMessage[] = [
       { role: 'system', content: persona },
+      { role: 'system', content: buildLocalDateTimeSystemMessage() },
       {
         role: 'system',
         content:

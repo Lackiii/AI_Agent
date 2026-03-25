@@ -1,0 +1,12 @@
+.chatPageVaultRow .chatPageVaultDeleteWrap {
+  display: inline-flex;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.chatPageVaultRow:hover .chatPageVaultDeleteWrap,
+.chatPageVaultRow.chatPageVaultRow--confirmOpen .chatPageVaultDeleteWrap {
+  opacity: 1;
+  pointer-events: auto;
+}

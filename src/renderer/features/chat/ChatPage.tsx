@@ -1,8 +1,18 @@
-import { ClearOutlined, FileSearchOutlined, SendOutlined } from '@ant-design/icons';
-import { App, Button, Card, Empty, Flex, Input, List, Modal, Space, Spin, Typography } from 'antd';
+import {
+  ClearOutlined,
+  DatabaseOutlined,
+  DeleteOutlined,
+  DownOutlined,
+  FileSearchOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
+import type { MenuProps } from 'antd';
+import { App, Button, Card, Dropdown, Empty, Flex, Input, List, Modal, Popconfirm, Space, Spin, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MarkdownContent } from '../../components/MarkdownContent';
+
+import './ChatPage.css';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -21,6 +31,8 @@ export const ChatPage = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewPath, setPreviewPath] = useState('');
   const [previewContent, setPreviewContent] = useState('');
+
+  const [vaultDeleteConfirmPath, setVaultDeleteConfirmPath] = useState<string | null>(null);
 
   const loadVaultList = useCallback(async () => {
     setVaultLoading(true);
@@ -58,6 +70,25 @@ export const ChatPage = () => {
     }
   };
 
+  const handleDeleteVaultFile = useCallback(
+    async (relPath: string) => {
+      try {
+        await window.assistantApi.vault.delete(relPath);
+        message.success('已删除文件');
+        if (previewPath === relPath) {
+          setPreviewOpen(false);
+          setPreviewPath('');
+          setPreviewContent('');
+        }
+        await loadVaultList();
+      } catch (error) {
+        const errMessage = error instanceof Error ? error.message : String(error);
+        message.error(`删除失败：${errMessage}`);
+      }
+    },
+    [message, previewPath, loadVaultList],
+  );
+
   const handleSend = async () => {
     const text = prompt.trim();
     if (!text) {
@@ -92,6 +123,22 @@ export const ChatPage = () => {
     }
   };
 
+  const memoryMenuItems: MenuProps['items'] = [
+    {
+      key: 'vault',
+      label: '查看已存资料',
+      icon: <FileSearchOutlined />,
+      onClick: () => setVaultOpen(true),
+    },
+    {
+      key: 'clear',
+      label: '清空记忆',
+      icon: <ClearOutlined />,
+      danger: true,
+      onClick: () => void handleClearMemory(),
+    },
+  ];
+
   return (
     <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <div>
@@ -99,7 +146,7 @@ export const ChatPage = () => {
           对话
         </Title>
         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          结合<strong>人设</strong>与本地短期记忆：用自然语言描述人设即可保存；说「恢复默认人设」等可还原。提醒可说「下午两点提醒我看书」。可让助手把随笔存入资料夹（下方「查看已存资料」）。
+          结合<strong>人设</strong>与本地短期记忆：用自然语言描述人设即可保存；说「恢复默认人设」等可还原。提醒可说「下午两点提醒我看书」。可让助手把随笔存入资料夹。
         </Paragraph>
       </div>
 
@@ -119,12 +166,11 @@ export const ChatPage = () => {
           <Flex wrap="wrap" gap="small" justify="space-between">
             <Button onClick={() => navigate('/page/home')}>回首页</Button>
             <Space wrap>
-              <Button icon={<FileSearchOutlined />} onClick={() => setVaultOpen(true)}>
-                查看已存资料
-              </Button>
-              <Button icon={<ClearOutlined />} onClick={() => void handleClearMemory()}>
-                清空记忆
-              </Button>
+              <Dropdown menu={{ items: memoryMenuItems }} placement="bottomRight" trigger={['click']}>
+                <Button icon={<DatabaseOutlined />}>
+                  记忆与资料 <DownOutlined />
+                </Button>
+              </Dropdown>
               <Button
                 type="primary"
                 icon={<SendOutlined />}
@@ -166,7 +212,7 @@ export const ChatPage = () => {
           </Button>,
         ]}
         width={520}
-        destroyOnClose
+        destroyOnHidden
       >
         <Spin spinning={vaultLoading}>
           {vaultFiles.length === 0 ? (
@@ -176,7 +222,26 @@ export const ChatPage = () => {
               size="small"
               dataSource={vaultFiles}
               renderItem={(item) => (
-                <List.Item>
+                <List.Item
+                  className={`chatPageVaultRow${
+                    vaultDeleteConfirmPath === item ? ' chatPageVaultRow--confirmOpen' : ''
+                  }`}
+                  actions={[
+                    <span key="delete" className="chatPageVaultDeleteWrap">
+                      <Popconfirm
+                        title="确定删除此文件？"
+                        description={item}
+                        okText="删除"
+                        okButtonProps={{ danger: true }}
+                        cancelText="取消"
+                        onOpenChange={(open) => setVaultDeleteConfirmPath(open ? item : null)}
+                        onConfirm={() => void handleDeleteVaultFile(item)}
+                      >
+                        <Button type="link" danger size="small" icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </span>,
+                  ]}
+                >
                   <Button type="link" style={{ padding: 0, height: 'auto' }} onClick={() => void openVaultPreview(item)}>
                     {item}
                   </Button>
@@ -192,12 +257,27 @@ export const ChatPage = () => {
         open={previewOpen}
         onCancel={() => setPreviewOpen(false)}
         footer={
-          <Button type="primary" onClick={() => setPreviewOpen(false)}>
-            关闭
-          </Button>
+          <Space>
+            <Popconfirm
+              title="确定删除此文件？"
+              description={previewPath}
+              okText="删除"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+              disabled={!previewPath || previewLoading}
+              onConfirm={() => void handleDeleteVaultFile(previewPath)}
+            >
+              <Button danger disabled={!previewPath || previewLoading}>
+                删除文件
+              </Button>
+            </Popconfirm>
+            <Button type="primary" onClick={() => setPreviewOpen(false)}>
+              关闭
+            </Button>
+          </Space>
         }
         width={720}
-        destroyOnClose
+        destroyOnHidden
         zIndex={1100}
       >
         <Spin spinning={previewLoading}>

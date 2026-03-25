@@ -38,6 +38,7 @@ declare global {
       vault: {
         list: () => Promise<string[]>;
         read: (relativePath: string) => Promise<VaultReadResult>;
+        delete: (relativePath: string) => Promise<boolean>;
       };
     };
     /** @deprecated 请使用 assistantApi.llm.chat */

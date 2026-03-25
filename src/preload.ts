@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('assistantApi', {
     list: () => ipcRenderer.invoke('vault:list') as Promise<string[]>,
     read: (relativePath: string) =>
       ipcRenderer.invoke('vault:read', relativePath) as Promise<VaultReadResult>,
+    delete: (relativePath: string) => ipcRenderer.invoke('vault:delete', relativePath) as Promise<boolean>,
   },
 });
 

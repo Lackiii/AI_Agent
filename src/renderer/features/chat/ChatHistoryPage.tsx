@@ -61,7 +61,7 @@ export const ChatHistoryPage = () => {
       </div>
 
       <Card variant="borderless" styles={{ body: { padding: 20 } }}>
-        <Space style={{ marginBottom: 16 }}>
+        <Space style={{ marginBottom: 16 , width: '100%'}}>
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
             刷新
           </Button>

@@ -54,6 +54,22 @@ const VAULT_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'vault_delete',
+      description:
+        '永久删除资料夹内的一个已存文本文件。仅当用户明确要求删除、移除某条已保存的笔记/文件时使用；path 为相对路径。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: '相对路径' },
+        },
+        required: ['path'],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 const NOTIFICATION_SHOW_TOOL = {

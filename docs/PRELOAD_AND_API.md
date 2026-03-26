@@ -16,13 +16,19 @@ Electron 安全模型下：**渲染进程默认不信任**，敏感能力放在*
 
 | 前端调用 | IPC 通道 | 主进程行为（摘要） |
 | --- | --- | --- |
-| `assistantApi.llm.chat(text)` | `llm:chat` | 人设/提醒处理 + 带记忆对话 |
+| `assistantApi.llm.chat(text)` | `llm:chat` | 人设/提醒处理 + 带记忆对话；模型可调用资料夹、问候、通知等工具 |
 | `assistantApi.memory.clear()` | `memory:clear` | 清空 `conversation-memory.json` |
 | `assistantApi.memory.list()` | `memory:list` | 只读返回已存对话消息数组 |
-| `assistantApi.persona.reset()` | `persona:reset` | 删除 `assistant-persona.json`（可选保留给调试） |
-| `assistantApi.reminders.list/create/remove` | `reminder:*` | 读写 `reminders.json` |
-| `assistantApi.screenshots.list` | `screenshot:list` | 占位列表 |
+| `assistantApi.memory.remove(id)` | `memory:remove` | 按 id 删除单条对话消息 |
+| `assistantApi.persona.reset()` | `persona:reset` | 删除 `assistant-persona.json`，恢复默认人设 |
+| `assistantApi.reminders.list/create/remove` | `reminder:*` | 读写 `reminders.json`（创建时可能同步后端） |
+| `assistantApi.screenshots.list` | `screenshot:list` | 截图记录列表（对接 FastAPI 为主） |
 | `assistantApi.greeting.getSettings / setSettings` | `greeting:getSettings` / `greeting:setSettings` | 定时问候开关与间隔；保存后会重启主进程调度 |
+| `assistantApi.greeting.sendTestNotification()` | `greeting:testNotification` | 发一条测试系统通知（handler 在 `bootstrap.ts`） |
+| `assistantApi.vault.list()` | `vault:list` | 列出 `ai-vault` 下文件相对路径 |
+| `assistantApi.vault.read(path)` | `vault:read` | 读资料夹内 UTF-8 文本 |
+| `assistantApi.vault.delete(path)` | `vault:delete` | 删除资料夹内指定文件 |
+| `assistantApi.navigation.onAppNavigate(cb)` | （`ipcRenderer.on('app:navigate')`） | 订阅主进程下发的路由跳转；返回取消订阅函数 |
 
 `deepseekApi.chat` 与 `llm:chat` **同源**，仅为兼容旧代码。
 

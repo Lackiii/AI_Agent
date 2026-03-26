@@ -18,6 +18,14 @@
 | `reminders.json` | `reminder.service.ts` | 提醒列表 | 可手改，注意 JSON 结构；更建议用界面或 IPC |
 | `greeting-settings.json` | `greeting-settings.service.ts` | 定时问候开关与间隔（`enabled`、`intervalMode`） | 侧栏「定时问候设置」抽屉会写；删文件 = 恢复默认（关闭、30 分钟档） |
 
+## 目录：`ai-vault/`（AI 资料夹）
+
+| 路径 | 谁写入 | 内容含义 | 你怎么改 |
+| --- | --- | --- | --- |
+| `ai-vault/**` | `ai-vault.service.ts`（对话中 **`vault_write` 工具** 或等价 IPC） | 助手保存的随笔、笔记等 **UTF-8 文本**；列表中为相对路径（可含子目录） | **应用内**：对话页「记忆与资料」→ 查看已存资料 → 预览或删除单文件。**手动**：关应用后直接删 `userData/ai-vault/` 下文件；勿用 `..` 越界路径（代码侧会拒绝） |
+
+删除子目录内最后一个文件后，**空目录可能仍存在**（当前实现不自动 prune）。
+
 ## 与「代码里的默认」关系
 
 - **人设**：有 `assistant-persona.json` 则**完全以其中 `content` 为 system**；没有则用 `src/config/persona.ts`。详见 [PERSONA.md](./PERSONA.md)。
@@ -26,6 +34,7 @@
 
 ## 备份与重置
 
-- **重置对话**：前端「清空记忆」或删 `conversation-memory.json`。
+- **重置对话**：前端「记忆与资料」菜单里的「清空记忆」，或删 `conversation-memory.json`。
 - **重置人设覆盖**：对话说「恢复默认人设」或删 `assistant-persona.json`，见 [PERSONA.md](./PERSONA.md)。
 - **清空提醒**：在提醒页删除条目，或编辑/删除 `reminders.json`（需关应用避免覆盖）。
+- **清空资料夹**：在对话页已存资料列表逐条删除，或退出应用后删除整个 `ai-vault` 目录（下次启动会按需再建）。

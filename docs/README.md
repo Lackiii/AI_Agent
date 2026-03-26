@@ -10,7 +10,7 @@
 | **[RENDERER_UI.md](./RENDERER_UI.md)** | 改界面：页面、路由、Ant Design 主题与布局 |
 | **[PRELOAD_AND_API.md](./PRELOAD_AND_API.md)** | 改 `preload`、前端 `window.assistantApi`、新增 IPC 通道 |
 | **[CONFIG_ENV_AND_LLM.md](./CONFIG_ENV_AND_LLM.md)** | `.env`、换模型厂商、改请求参数与温度 |
-| **[DATA_FILES.md](./DATA_FILES.md)** | 用户数据目录里有哪些 JSON、改了会怎样 |
+| **[DATA_FILES.md](./DATA_FILES.md)** | 用户数据目录：`*.json`、**`ai-vault/`** 资料夹路径与重置方式 |
 | **[BACKEND_FASTAPI.md](./BACKEND_FASTAPI.md)** | FastAPI 后端：SQLite/APScheduler/WS/OCR 接入说明 |
 | **[BUILD_AND_TROUBLESHOOT.md](./BUILD_AND_TROUBLESHOOT.md)** | 脚本命令、打包、常见问题（如 IPC 未注册） |
 | **[llms.txt](./llms.txt)** | Ant Design 官方文档索引（外链汇总） |

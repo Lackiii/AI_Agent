@@ -18,7 +18,7 @@ const { Text, Title, Paragraph } = Typography;
 
 export const ChatPage = () => {
   const navigate = useNavigate();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [prompt, setPrompt] = useState('');
   const [result, setResult] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -111,7 +111,7 @@ export const ChatPage = () => {
     }
   };
 
-  const handleClearMemory = async () => {
+  const doClearMemory = async () => {
     try {
       await window.assistantApi.memory.clear();
       setResult('');
@@ -121,6 +121,17 @@ export const ChatPage = () => {
       const errMessage = error instanceof Error ? error.message : String(error);
       message.error(errMessage);
     }
+  };
+
+  const handleClearMemory = () => {
+    modal.confirm({
+      title: '确定清空对话记忆？',
+      content: '清空后不可恢复。',
+      okText: '清空',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => doClearMemory(),
+    });
   };
 
   const memoryMenuItems: MenuProps['items'] = [
@@ -135,7 +146,7 @@ export const ChatPage = () => {
       label: '清空记忆',
       icon: <ClearOutlined />,
       danger: true,
-      onClick: () => void handleClearMemory(),
+      onClick: () => handleClearMemory(),
     },
   ];
 
@@ -166,7 +177,11 @@ export const ChatPage = () => {
           <Flex wrap="wrap" gap="small" justify="space-between">
             <Button onClick={() => navigate('/page/home')}>回首页</Button>
             <Space wrap>
-              <Dropdown menu={{ items: memoryMenuItems }} placement="bottomRight" trigger={['click']}>
+              <Dropdown
+                menu={{ items: memoryMenuItems }}
+                placement="bottomRight"
+                trigger={['click']}
+              >
                 <Button icon={<DatabaseOutlined />}>
                   记忆与资料 <DownOutlined />
                 </Button>
@@ -223,9 +238,8 @@ export const ChatPage = () => {
               dataSource={vaultFiles}
               renderItem={(item) => (
                 <List.Item
-                  className={`chatPageVaultRow${
-                    vaultDeleteConfirmPath === item ? ' chatPageVaultRow--confirmOpen' : ''
-                  }`}
+                  className={`chatPageVaultRow${vaultDeleteConfirmPath === item ? ' chatPageVaultRow--confirmOpen' : ''
+                    }`}
                   actions={[
                     <span key="delete" className="chatPageVaultDeleteWrap">
                       <Popconfirm

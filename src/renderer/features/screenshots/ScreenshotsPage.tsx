@@ -1,10 +1,15 @@
-import { CameraOutlined, DeleteOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import { App, Button, Card, Empty, Input, InputNumber, List, Popconfirm, Space, Tag, Typography } from 'antd';
+import Icon, { CameraOutlined, ClockCircleFilled, ClockCircleOutlined, DeleteOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Card, Empty, Flex, Input, InputNumber, List, Popconfirm, Space, Tag, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import type { OcrEngineStatus, ScreenshotCaptureStatus, ScreenshotRecord } from '../../../shared/types/domain';
 import './ScreenshotsPage.css';
 
 const { Title, Paragraph, Text } = Typography;
+const formatLocalDateTime = (iso: string): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('zh-CN', { hour12: false });
+};
 
 export const ScreenshotsPage = () => {
   const { message } = App.useApp();
@@ -16,7 +21,7 @@ export const ScreenshotsPage = () => {
   const [windowStart, setWindowStart] = useState('');
   const [windowEnd, setWindowEnd] = useState('');
   const [ocrEngine, setOcrEngine] = useState<OcrEngineStatus | null>(null);
-
+  const [isTiming, setIsTiming] = useState(true);
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -155,7 +160,7 @@ export const ScreenshotsPage = () => {
           截图轨迹
         </Title>
         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          对齐论文能力：支持定时截图、OCR 入库与按 OCR 文本检索轨迹。
+          支持定时截图、OCR 入库与按 OCR 文本检索轨迹。
         </Paragraph>
         <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
           OCR 引擎：
@@ -174,13 +179,14 @@ export const ScreenshotsPage = () => {
 
       <Card variant="borderless">
         <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-          <Space wrap>
+          <Space>
             <Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>
               刷新
             </Button>
             <Button icon={<CameraOutlined />} onClick={() => void handleCaptureNow()} loading={loading}>
               立即截图
             </Button>
+            <Button icon={isTiming ? <ClockCircleFilled /> : <ClockCircleOutlined />} onClick={() => setIsTiming(!isTiming)}>定时截图</Button>
             <Popconfirm
               title="删除全部截图记录？"
               description="此操作不可恢复"
@@ -191,6 +197,55 @@ export const ScreenshotsPage = () => {
             >
               <Button danger>一键删除</Button>
             </Popconfirm>
+          </Space>
+          <Text type="secondary">
+            状态：
+            {status.running
+              ? `运行中（每 ${status.intervalMinutes || 5} 分钟${status.windowStart && status.windowEnd ? `，${status.windowStart}-${status.windowEnd}` : ''
+              }）`
+              : '已停止'}
+          </Text>
+        </Space>
+      </Card>
+
+      {isTiming && (
+        <Card variant="borderless">
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+            <Space wrap>
+              <InputNumber
+                min={1}
+                max={240}
+                value={intervalMinutes}
+                onChange={(v) => setIntervalMinutes(Number(v || 5))}
+                addonAfter="分钟"
+                style={{ width: 160 }}
+              />
+              <Input
+                placeholder="开始时间 HH:mm（可选）"
+                value={windowStart}
+                onChange={(e) => setWindowStart(e.target.value)}
+                style={{ width: 180 }}
+              />
+              <Input
+                placeholder="结束时间 HH:mm（可选）"
+                value={windowEnd}
+                onChange={(e) => setWindowEnd(e.target.value)}
+                style={{ width: 180 }}
+              />
+            </Space>
+            <Input
+              allowClear
+              placeholder="按 OCR 文本检索轨迹（关键词）"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+            />
+            {status.lastCapturedAt ? (
+              <Text type="secondary">
+                最近截图：{formatLocalDateTime(status.lastCapturedAt)}
+              </Text>
+            ) : null}
+          </Space>
+          <Flex justify="end">
             {status.running ? (
               <Button danger icon={<PauseCircleOutlined />} onClick={() => void handleStop()} loading={loading}>
                 停止定时截图
@@ -200,20 +255,11 @@ export const ScreenshotsPage = () => {
                 开启定时截图
               </Button>
             )}
-          </Space>
-          <Text type="secondary">
-            状态：
-            {status.running
-              ? `运行中（每 ${status.intervalMinutes || 5} 分钟${
-                  status.windowStart && status.windowEnd ? `，${status.windowStart}-${status.windowEnd}` : ''
-                }）`
-              : '已停止'}
-          </Text>
-        </Space>
-      </Card>
-
+          </Flex>
+        </Card>)
+      }
       <Card variant="borderless">
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Space wrap>
             <InputNumber
               min={1}
@@ -277,7 +323,7 @@ export const ScreenshotsPage = () => {
                 ]}
               >
                 <List.Item.Meta
-                  title={<Text code>{r.capturedAt}</Text>}
+                  title={<Text code>{formatLocalDateTime(r.capturedAt)}</Text>}
                   description={
                     <Space direction="vertical" size={2}>
                       <Tag color={getOcrStatusColor(r)} style={{ width: 'fit-content' }}>

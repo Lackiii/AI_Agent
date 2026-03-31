@@ -23,6 +23,13 @@ Electron 安全模型下：**渲染进程默认不信任**，敏感能力放在*
 | `assistantApi.persona.reset()` | `persona:reset` | 删除 `assistant-persona.json`，恢复默认人设 |
 | `assistantApi.reminders.list/create/remove` | `reminder:*` | 读写 `reminders.json`（创建时可能同步后端） |
 | `assistantApi.screenshots.list` | `screenshot:list` | 截图记录列表（对接 FastAPI 为主） |
+| `assistantApi.screenshots.captureNow()` | `screenshot:captureNow` | 立即截图并提交 OCR |
+| `assistantApi.screenshots.start(options)` | `screenshot:start` | 开启定时截图（`intervalMinutes` + 可选 `windowStart/windowEnd`） |
+| `assistantApi.screenshots.stop()` | `screenshot:stop` | 停止定时截图 |
+| `assistantApi.screenshots.status()` | `screenshot:status` | 获取采集状态（运行中、间隔、窗口、最近截图时间） |
+| `assistantApi.screenshots.ocrStatus()` | `screenshot:ocrStatus` | OCR 引擎可用性状态 |
+| `assistantApi.screenshots.remove(id)` | `screenshot:delete` | 删除单条截图记录 |
+| `assistantApi.screenshots.removeAll()` | `screenshot:deleteAll` | 删除全部截图记录 |
 | `assistantApi.greeting.getSettings / setSettings` | `greeting:getSettings` / `greeting:setSettings` | 定时问候开关与间隔；保存后会重启主进程调度 |
 | `assistantApi.greeting.sendTestNotification()` | `greeting:testNotification` | 发一条测试系统通知（handler 在 `bootstrap.ts`） |
 | `assistantApi.vault.list()` | `vault:list` | 列出 `ai-vault` 下文件相对路径 |

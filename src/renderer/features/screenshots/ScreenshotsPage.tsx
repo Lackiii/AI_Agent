@@ -1,7 +1,8 @@
-import { CameraOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import { App, Button, Card, Empty, Input, InputNumber, List, Space, Tag, Typography } from 'antd';
+import { CameraOutlined, DeleteOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Card, Empty, Input, InputNumber, List, Popconfirm, Space, Tag, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import type { OcrEngineStatus, ScreenshotCaptureStatus, ScreenshotRecord } from '../../../shared/types/domain';
+import './ScreenshotsPage.css';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -96,6 +97,38 @@ export const ScreenshotsPage = () => {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    setLoading(true);
+    try {
+      const ok = await window.assistantApi.screenshots.remove(id);
+      if (ok) {
+        message.success('已删除截图记录');
+      } else {
+        message.warning('未找到该截图记录');
+      }
+      await refresh();
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      message.error(`删除失败：${errMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    setLoading(true);
+    try {
+      const deletedCount = await window.assistantApi.screenshots.removeAll();
+      message.success(`已删除 ${deletedCount} 条截图记录`);
+      await refresh();
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      message.error(`一键删除失败：${errMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const normalizedKeyword = keyword.trim().toLowerCase();
   const filteredRows = normalizedKeyword
     ? rows.filter((r) => (r.ocrText || '').toLowerCase().includes(normalizedKeyword))
@@ -148,6 +181,16 @@ export const ScreenshotsPage = () => {
             <Button icon={<CameraOutlined />} onClick={() => void handleCaptureNow()} loading={loading}>
               立即截图
             </Button>
+            <Popconfirm
+              title="删除全部截图记录？"
+              description="此操作不可恢复"
+              okText="全部删除"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+              onConfirm={() => void handleDeleteAll()}
+            >
+              <Button danger>一键删除</Button>
+            </Popconfirm>
             {status.running ? (
               <Button danger icon={<PauseCircleOutlined />} onClick={() => void handleStop()} loading={loading}>
                 停止定时截图
@@ -210,7 +253,29 @@ export const ScreenshotsPage = () => {
           <List
             dataSource={filteredRows}
             renderItem={(r) => (
-              <List.Item>
+              <List.Item
+                className="screenshots-list-item"
+                actions={[
+                  <span key="delete" className="screenshots-delete-wrap" style={{ flexShrink: 0 }}>
+                    <Popconfirm
+                      title="删除这条截图记录？"
+                      description="删除后不可恢复"
+                      okText="删除"
+                      okButtonProps={{ danger: true }}
+                      cancelText="取消"
+                      onConfirm={() => void handleDelete(r.id)}
+                    >
+                      <Button
+                        type="text"
+                        size="small"
+                        className="screenshots-delete-btn"
+                        aria-label="删除截图记录"
+                        icon={<DeleteOutlined className="screenshots-delete-icon" />}
+                      />
+                    </Popconfirm>
+                  </span>,
+                ]}
+              >
                 <List.Item.Meta
                   title={<Text code>{r.capturedAt}</Text>}
                   description={

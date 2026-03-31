@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('assistantApi', {
     stop: () => ipcRenderer.invoke('screenshot:stop') as Promise<ScreenshotCaptureStatus>,
     status: () => ipcRenderer.invoke('screenshot:status') as Promise<ScreenshotCaptureStatus>,
     ocrStatus: () => ipcRenderer.invoke('screenshot:ocrStatus') as Promise<OcrEngineStatus>,
+    remove: (id: string) => ipcRenderer.invoke('screenshot:delete', id) as Promise<boolean>,
+    removeAll: () => ipcRenderer.invoke('screenshot:deleteAll') as Promise<number>,
   },
   greeting: {
     getSettings: () => ipcRenderer.invoke('greeting:getSettings') as Promise<GreetingSettingsDTO>,

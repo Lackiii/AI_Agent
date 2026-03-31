@@ -1,8 +1,9 @@
 import { runNotificationShowTool } from './greeting-notification.service';
 import { runVaultTool } from './ai-vault.service';
 import { runGreetingUpdateTool } from './greeting-tool.service';
+import { runScreenshotTool } from './screenshot.service';
 
-export const runAssistantTool = (name: string, argsJson: string): string => {
+export const runAssistantTool = async (name: string, argsJson: string): Promise<string> => {
   if (name === 'notification_show') {
     return runNotificationShowTool(argsJson);
   }
@@ -22,6 +23,9 @@ export const runAssistantTool = (name: string, argsJson: string): string => {
       // ignore
     }
     return result;
+  }
+  if (name === 'screenshot_search') {
+    return runScreenshotTool(name, argsJson);
   }
   return runVaultTool(name, argsJson);
 };

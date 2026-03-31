@@ -42,6 +42,43 @@ export const listScreenshots = async (filter?: ScreenshotListFilter): Promise<Sc
   }
 };
 
+export const removeScreenshot = async (id: string): Promise<boolean> => {
+  const screenshotId = String(id ?? '').trim();
+  if (!screenshotId) return false;
+  try {
+    const baseUrl = getBackendBaseUrl().replace(/\/$/, '');
+    const res = await fetch(`${baseUrl}/screenshots/${encodeURIComponent(screenshotId)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`backend error: ${res.status}`);
+    const data = (await res.json()) as { deleted?: boolean };
+    if (data.deleted) return true;
+  } catch {
+    // fallback to local in-memory trail
+  }
+  const idx = inMemoryTrail.findIndex((r) => r.id === screenshotId);
+  if (idx >= 0) {
+    inMemoryTrail.splice(idx, 1);
+    return true;
+  }
+  return false;
+};
+
+export const removeAllScreenshots = async (): Promise<number> => {
+  try {
+    const baseUrl = getBackendBaseUrl().replace(/\/$/, '');
+    const res = await fetch(`${baseUrl}/screenshots`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`backend error: ${res.status}`);
+    const data = (await res.json()) as { deletedCount?: number };
+    if (Number.isFinite(data.deletedCount)) {
+      return Number(data.deletedCount);
+    }
+  } catch {
+    // fallback to local in-memory trail
+  }
+  const deleted = inMemoryTrail.length;
+  inMemoryTrail.splice(0, inMemoryTrail.length);
+  return deleted;
+};
+
 export const registerScreenshotStub = (record: ScreenshotRecord): void => {
   inMemoryTrail.push(record);
 };
@@ -158,4 +195,76 @@ export const stopScreenshotCapture = (): ScreenshotCaptureStatus => {
 
 export const getScreenshotCaptureStatus = (): ScreenshotCaptureStatus => {
   return { ...captureStatus };
+};
+
+const toPreview = (v: string | undefined, maxLen = 120): string => {
+  if (!v) return '';
+  const t = v.replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  return t.length > maxLen ? `${t.slice(0, maxLen)}...` : t;
+};
+
+export const runScreenshotTool = async (name: string, argsJson: string): Promise<string> => {
+  if (name !== 'screenshot_search') {
+    return JSON.stringify({ ok: false, error: `Unknown screenshot tool: ${name}` });
+  }
+  try {
+    const raw = argsJson?.trim() ? JSON.parse(argsJson) : {};
+    const keyword = String(raw?.keyword ?? '').trim().toLowerCase();
+    const from = raw?.from ? String(raw.from) : undefined;
+    const to = raw?.to ? String(raw.to) : undefined;
+    const status = raw?.status ? String(raw.status) : undefined;
+    const limitRaw = Number(raw?.limit ?? 6);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 20) : 6;
+
+    let rows = await listScreenshots({ from, to });
+    rows = rows.slice().sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+    if (status) {
+      rows = rows.filter((r) => (r.ocrStatus || 'unknown') === status);
+    }
+    if (keyword) {
+      rows = rows.filter((r) => {
+        const haystack = `${r.ocrText || ''} ${r.ocrError || ''} ${r.filePath || ''}`.toLowerCase();
+        return haystack.includes(keyword);
+      });
+    }
+    const picked = rows.slice(0, limit).map((r) => ({
+      id: r.id,
+      capturedAt: r.capturedAt,
+      ocrStatus: r.ocrStatus || 'unknown',
+      ocrTextPreview: toPreview(r.ocrText),
+      ocrErrorPreview: toPreview(r.ocrError, 80),
+      filePath: r.filePath || '',
+    }));
+    const timeline = picked.map(
+      (x, i) =>
+        `${i + 1}) ${x.capturedAt} | ${x.ocrStatus} | ${x.ocrTextPreview || '（无 OCR 文本）'}${
+          x.ocrErrorPreview ? ` | err=${x.ocrErrorPreview}` : ''
+        }`,
+    );
+    const statusCounter = rows.reduce(
+      (acc, r) => {
+        const s = r.ocrStatus || 'unknown';
+        acc[s] = (acc[s] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+    const statusSummary = Object.entries(statusCounter)
+      .map(([k, v]) => `${k}:${v}`)
+      .join(', ');
+    return JSON.stringify({
+      ok: true,
+      total: rows.length,
+      returned: picked.length,
+      query: { keyword, from, to, status, limit },
+      statusSummary,
+      timeline,
+      items: picked,
+      guidance:
+        '回答用户时优先引用 timeline；若没有命中，明确说明“未检索到相关截图证据”。若命中含 ocr_error，请给出 1-3 条简短排查建议。',
+    });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) });
+  }
 };

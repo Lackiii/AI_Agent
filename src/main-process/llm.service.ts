@@ -124,7 +124,31 @@ const GREETING_TOOL = {
   },
 };
 
-const ASSISTANT_TOOLS = [...VAULT_TOOLS, NOTIFICATION_SHOW_TOOL, GREETING_TOOL];
+const SCREENSHOT_SEARCH_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'screenshot_search',
+    description:
+      '检索截图轨迹（按关键词、时间范围与 OCR 状态过滤），返回命中的截图时间与 OCR 摘要。适用于回答“我刚刚做了什么/哪里报错/什么时候开始失败”等问题。',
+    parameters: {
+      type: 'object',
+      properties: {
+        keyword: { type: 'string', description: '关键词，可为空' },
+        from: { type: 'string', description: '起始时间，ISO 8601，可选' },
+        to: { type: 'string', description: '结束时间，ISO 8601，可选' },
+        status: {
+          type: 'string',
+          enum: ['ok', 'no_text', 'engine_unavailable', 'ocr_error', 'backend_unreachable', 'unknown'],
+          description: '按 OCR 状态筛选，可选',
+        },
+        limit: { type: 'number', description: '返回条数上限 1-20，默认 6' },
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
+const ASSISTANT_TOOLS = [...VAULT_TOOLS, NOTIFICATION_SHOW_TOOL, GREETING_TOOL, SCREENSHOT_SEARCH_TOOL];
 
 const MAX_TOOL_ROUNDS = 8;
 
@@ -242,7 +266,7 @@ export const chatCompletionWithAssistantTools = async (
 
       for (const tc of normalizedCalls) {
         if (tc.type !== 'function') continue;
-        const result = runAssistantTool(tc.function.name, tc.function.arguments);
+        const result = await runAssistantTool(tc.function.name, tc.function.arguments);
         working.push({
           role: 'tool',
           tool_call_id: tc.id,

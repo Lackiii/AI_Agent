@@ -1,0 +1,23 @@
+.screenshots-list-item {
+  position: relative;
+}
+
+.screenshots-list-item .screenshots-delete-wrap {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.screenshots-list-item:hover .screenshots-delete-wrap {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.screenshots-delete-btn {
+  color: rgba(0, 0, 0, 0.45) !important;
+  transition: color 0.2s ease;
+}
+
+.screenshots-list-item:hover .screenshots-delete-btn:hover {
+  color: rgba(0, 0, 0, 0.65) !important;
+}

@@ -42,6 +42,8 @@ declare global {
         stop: () => Promise<ScreenshotCaptureStatus>;
         status: () => Promise<ScreenshotCaptureStatus>;
         ocrStatus: () => Promise<OcrEngineStatus>;
+        remove: (id: string) => Promise<boolean>;
+        removeAll: () => Promise<number>;
       };
       greeting: {
         getSettings: () => Promise<GreetingSettingsDTO>;

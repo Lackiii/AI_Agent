@@ -12,7 +12,7 @@
 | AI 资料夹（随笔/笔记） | `src/main-process/ai-vault.service.ts`、`vault:*` IPC | 数据在 `userData/ai-vault/` 下；模型工具 **`vault_list` / `vault_read` / `vault_write` / `vault_delete`**（见 `llm.service.ts` + `runVaultTool`）。前端对话页可查看列表、预览、**删除**文件（与工具删除共用同一套路径校验）。 |
 | 提醒记录 | `src/main-process/reminder.service.ts`、`reminder:*` IPC | 本地 `userData/reminders.json`，前端 `src/renderer/features/reminders/`。对话中含「提醒」等关键词时，主进程会通过 `reminder-extract.service.ts` 调用 LLM 抽取事项与时间并自动 `createReminder`。 |
 | 定时问候 + 通知 | `greeting-settings.service.ts`、`greeting-scheduler.service.ts`、`greeting-notification.service.ts`、`greeting-tool.service.ts` | 设置存 `greeting-settings.json`；到点或用户通过工具 **`greeting_update`** 调整间隔。可调用 **`notification_show`** 立即弹出系统通知。测试通知 IPC 见下文 `greeting:testNotification`（在 `bootstrap.ts` 注册）。 |
-| 定时截图 + OCR + 轨迹检索 | `src/main-process/screenshot.service.ts`、`screenshot:list` IPC | 已对接后端 `GET /screenshots` 与 `POST /screenshots/ocr`；采集链路（`desktopCapturer`/定时采集）待你确认截图方法后补齐。 |
+| 定时截图 + OCR + 轨迹检索 | `src/main-process/screenshot.service.ts`、`screenshot:*` IPC | 已支持立即截图、定时采集（窗口/间隔）、OCR 状态可观测、单条/全部删除；对话链路接入 `screenshot_search` 工具用于“基于截图证据回答”。 |
 | 前端界面 | `src/renderer/` | React + TypeScript + `react-router-dom`（Hash 路由）+ **Ant Design**（`ConfigProvider` 主题、`Layout`/`Menu`/`Card` 等，见 `docs/llms.txt` 索引）。含**对话历史**页、**定时问候设置**侧栏抽屉等。 |
 
 ## 目录结构（摘要）
@@ -24,12 +24,12 @@ src/
   main-process/
     bootstrap.ts               # 应用生命周期（含部分 IPC，如测试通知）
     env.ts                     # .env 加载
-    llm.service.ts             # LLM HTTP 调用 + 资料夹/问候等工具声明
+    llm.service.ts             # LLM HTTP 调用 + 资料夹/问候/截图检索等工具声明
     memory.service.ts          # 对话记忆持久化
     ai-vault.service.ts        # AI 资料夹目录 list/read/write/delete + runVaultTool
     datetime-context.ts        # 注入当前本地时间 system 片段（对话用）
     reminder.service.ts        # 提醒持久化
-    screenshot.service.ts      # 截图轨迹（对接后端为主）
+    screenshot.service.ts      # 截图轨迹（采集/删除/OCR状态/检索工具执行）
     greeting-*.service.ts      # 定时问候、通知、工具调度等
     ipc/register.ts            # 统一注册 IPC（大半业务通道）
     window.ts                  # BrowserWindow
@@ -52,7 +52,7 @@ src/
 
 主业务通道多在 **`ipc/register.ts`**；下列通道在 **`bootstrap.ts`** 注册（避免与 `register` 循环依赖）：`greeting:testNotification`。
 
-- `llm:chat` / `deepseek:chat`：发送用户输入，返回模型回复（含记忆、可选工具调用：资料夹、定时问候、立即通知等）。
+- `llm:chat` / `deepseek:chat`：发送用户输入，返回模型回复（含记忆、可选工具调用：资料夹、定时问候、立即通知、截图检索）。
 - `memory:clear`：清空本地对话记忆文件。
 - `memory:list`：只读列出 `conversation-memory.json` 中的 user/assistant 消息。
 - `memory:remove`：按消息 id 删除单条记忆（对话历史页可用）。
@@ -61,6 +61,10 @@ src/
 - `greeting:testNotification`：立即发送一条测试系统通知（设置抽屉内按钮）。
 - `reminder:list` | `reminder:create` | `reminder:delete`
 - `screenshot:list`：截图记录列表（优先读 FastAPI 后端）。
+- `screenshot:captureNow`：立即截图并提交 OCR。
+- `screenshot:start` / `screenshot:stop` / `screenshot:status`：定时采集开关与状态。
+- `screenshot:ocrStatus`：OCR 引擎可用性状态。
+- `screenshot:delete` / `screenshot:deleteAll`：删除单条或全部截图记录。
 - `vault:list`：列出 `userData/ai-vault/` 下所有文件相对路径。
 - `vault:read`：按相对路径读 UTF-8 文本。
 - `vault:delete`：删除资料夹内指定文件（路径校验同读写）。

@@ -25,6 +25,8 @@ import {
   getOcrEngineStatus,
   getScreenshotCaptureStatus,
   listScreenshots,
+  removeAllScreenshots,
+  removeScreenshot,
   startScreenshotCapture,
   stopScreenshotCapture,
 } from '../screenshot.service';
@@ -39,6 +41,119 @@ import type { ChatMessage } from '../../shared/types/llm';
 import type { VaultReadResult } from '../../shared/types/vault';
 
 const MEMORY_WINDOW = 20;
+const SCREENSHOT_CONTEXT_RECENT_LIMIT = 8;
+const SCREENSHOT_CONTEXT_MATCH_LIMIT = 5;
+
+const SCREENSHOT_STOP_WORDS = new Set([
+  '这个',
+  '那个',
+  '怎么',
+  '为什么',
+  '是否',
+  '一下',
+  '帮我',
+  '我们',
+  '可以',
+  '需要',
+  '现在',
+  '最近',
+  '根据',
+  '关于',
+  '截图',
+  '轨迹',
+  '记录',
+  '主动',
+  '对话',
+  '回答',
+  'please',
+  'help',
+  'what',
+  'why',
+  'how',
+  'with',
+  'from',
+  'that',
+  'this',
+  'have',
+  'show',
+  'screen',
+  'screenshot',
+]);
+
+const toTextPreview = (text: string | undefined, maxLen = 90): string => {
+  if (!text) return '（无 OCR 文本）';
+  const compact = text.replace(/\s+/g, ' ').trim();
+  if (!compact) return '（无 OCR 文本）';
+  return compact.length > maxLen ? `${compact.slice(0, maxLen)}...` : compact;
+};
+
+const extractPromptKeywords = (prompt: string): string[] => {
+  const raw = prompt
+    .toLowerCase()
+    .match(/[a-z0-9_]{2,}|[\u4e00-\u9fa5]{2,}/g);
+  if (!raw) return [];
+  const dedup = new Set<string>();
+  for (const w of raw) {
+    if (SCREENSHOT_STOP_WORDS.has(w)) continue;
+    dedup.add(w);
+  }
+  return [...dedup].slice(0, 8);
+};
+
+const buildScreenshotContextMessage = async (prompt: string): Promise<string> => {
+  let rows = await listScreenshots();
+  if (!rows.length) {
+    return '截图轨迹上下文：暂无记录。';
+  }
+  rows = rows.slice().sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+  const recent = rows.slice(0, SCREENSHOT_CONTEXT_RECENT_LIMIT);
+  const keywords = extractPromptKeywords(prompt);
+  const matched =
+    keywords.length === 0
+      ? []
+      : rows
+          .filter((r) => {
+            const text = `${r.ocrText || ''} ${r.ocrError || ''}`.toLowerCase();
+            return keywords.some((k) => text.includes(k));
+          })
+          .slice(0, SCREENSHOT_CONTEXT_MATCH_LIMIT);
+  const statusCounter = rows.reduce(
+    (acc, r) => {
+      const s = r.ocrStatus || 'unknown';
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  const recentLines = recent.map(
+    (r, i) =>
+      `${i + 1}. ${r.capturedAt} | status=${r.ocrStatus || 'unknown'} | ${toTextPreview(r.ocrText)}${
+        r.ocrError ? ` | err=${toTextPreview(r.ocrError, 60)}` : ''
+      }`,
+  );
+  const matchedLines = matched.map(
+    (r, i) =>
+      `${i + 1}. ${r.capturedAt} | status=${r.ocrStatus || 'unknown'} | ${toTextPreview(r.ocrText)}${
+        r.ocrError ? ` | err=${toTextPreview(r.ocrError, 60)}` : ''
+      }`,
+  );
+  const statusText = Object.entries(statusCounter)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(', ');
+  return [
+    '截图轨迹上下文（仅作辅助，不可编造）：',
+    `- 记录总数：${rows.length}`,
+    `- OCR 状态分布：${statusText || 'unknown:0'}`,
+    `- 用户问题关键词：${keywords.length ? keywords.join(', ') : '无'}`,
+    '- 最近截图（按时间倒序）：',
+    ...recentLines,
+    ...(matchedLines.length
+      ? ['- 与当前问题相关的截图命中：', ...matchedLines]
+      : ['- 与当前问题相关的截图命中：无']),
+    '当用户问“我刚刚在做什么/报错是什么/哪一步失败”时，优先基于以上截图轨迹回答；若证据不足请明确说明不确定。',
+    '若最近截图反复出现 error/exception/fail/traceback 等信息，可在回复中主动给出简短排查建议（1-3 条）。',
+  ].join('\n');
+};
 
 const hourToChineseClock = (hour24: number): string => {
   const h12 = hour24 % 12;
@@ -145,13 +260,19 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   const messages: ChatMessage[] = [{ role: 'system', content: getEffectivePersona() }];
 
   messages.push({ role: 'system', content: buildLocalDateTimeSystemMessage() });
+  try {
+    messages.push({ role: 'system', content: await buildScreenshotContextMessage(trimmed) });
+  } catch {
+    // 截图上下文获取失败不阻断主对话
+  }
 
   messages.push({
     role: 'system',
     content: `你拥有工具：
 1) vault_list / vault_read / vault_write / vault_delete：只能访问本机用户资料目录下的 AI 资料夹（其它路径一律不可用）。资料夹绝对路径：${getVaultRootPath()}。用户让你保存随笔/笔记/草稿时，必须用 vault_write 写入完整正文；未调用工具则视为未保存。用户明确要求删除资料夹内某个已存文件时，用 vault_delete。
 2) notification_show：立刻弹出一条系统通知（Toast），且正文会写入对话记忆（用户可在「对话历史」看到），便于你记得自己刚通过弹窗说过什么。用户要求「马上/立即弹窗或通知测试」等必须调用；参数 body 为通知正文。
-3) greeting_update：控制「定时主动问候」（到点发系统通知、一两句关心话，用户未发消息也会触发）。用户希望每隔一段时间被提醒休息、喝水、陪聊、写代码间歇等，须调用本工具开启并设定间隔（如半小时用 interval_mode=30m，或 interval_minutes=30）；用户说下班、明天见、再见、不用提醒、关掉问候等，须设 enabled=false。若用户只是描述需求，你应在回复中确认已生效（并实际调用工具）。`,
+3) greeting_update：控制「定时主动问候」（到点发系统通知、一两句关心话，用户未发消息也会触发）。用户希望每隔一段时间被提醒休息、喝水、陪聊、写代码间歇等，须调用本工具开启并设定间隔（如半小时用 interval_mode=30m，或 interval_minutes=30）；用户说下班、明天见、再见、不用提醒、关掉问候等，须设 enabled=false。若用户只是描述需求，你应在回复中确认已生效（并实际调用工具）。
+4) screenshot_search：检索截图轨迹（OCR 摘要/报错/时间），用于回答“我刚刚在做什么”“刚才什么报错”“从什么时候开始失败”等问题。遇到这类请求，应优先调用该工具再回答；证据不足时要明确说明。工具返回里含 timeline（时间线摘要）与 statusSummary（状态汇总），请优先引用它们组织回答。`,
   });
 
   if (reminderOutcome === 'created') {
@@ -201,6 +322,8 @@ export const registerIpcHandlers = (): void => {
   ipcMain.removeHandler('screenshot:stop');
   ipcMain.removeHandler('screenshot:status');
   ipcMain.removeHandler('screenshot:ocrStatus');
+  ipcMain.removeHandler('screenshot:delete');
+  ipcMain.removeHandler('screenshot:deleteAll');
   ipcMain.removeHandler('deepseek:chat');
   ipcMain.removeHandler('greeting:getSettings');
   ipcMain.removeHandler('greeting:setSettings');
@@ -260,6 +383,14 @@ export const registerIpcHandlers = (): void => {
 
   ipcMain.handle('screenshot:ocrStatus', async () => {
     return getOcrEngineStatus();
+  });
+
+  ipcMain.handle('screenshot:delete', async (_event, id: string) => {
+    return removeScreenshot(id);
+  });
+
+  ipcMain.handle('screenshot:deleteAll', async () => {
+    return removeAllScreenshots();
   });
 
   ipcMain.handle('greeting:getSettings', async () => getGreetingSettings());

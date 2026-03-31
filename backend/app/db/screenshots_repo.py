@@ -86,3 +86,25 @@ def create_screenshot_record(
     finally:
         conn.close()
 
+
+def delete_screenshot_record(screenshot_id: str) -> bool:
+    ensure_repo_ready()
+    conn = get_db_connection()
+    try:
+        cur = conn.execute("DELETE FROM screenshots WHERE id = ?", (screenshot_id,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def delete_all_screenshot_records() -> int:
+    ensure_repo_ready()
+    conn = get_db_connection()
+    try:
+        cur = conn.execute("DELETE FROM screenshots")
+        conn.commit()
+        return int(cur.rowcount or 0)
+    finally:
+        conn.close()
+

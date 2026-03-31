@@ -27,6 +27,14 @@
 
 删除子目录内最后一个文件后，**空目录可能仍存在**（当前实现不自动 prune）。
 
+## 后端 SQLite（截图轨迹）
+
+当后端 FastAPI 启用时，截图轨迹写入 `backend_data/app.sqlite3`（`screenshots` 表）：
+
+- 关键字段：`captured_at`、`ocr_text`、`ocr_status`、`ocr_error`
+- 前端「截图轨迹」页的**单条删除**与**一键删除**会通过后端接口删除对应记录
+- 后端不可用时，主进程会回退到内存记录（重启后不保留）
+
 ## 与「代码里的默认」关系
 
 - **人设**：有 `assistant-persona.json` 则**完全以其中 `content` 为 system**；没有则用 `src/config/persona.ts`。详见 [PERSONA.md](./PERSONA.md)。

@@ -9,7 +9,12 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from app.core.config import BACKEND_PORT, BACKEND_HOST, BACKEND_WS_PATH
 from app.db.database import init_schema
 from app.db.reminders_repo import create_reminder, delete_reminder, list_reminders, ensure_repo_ready
-from app.db.screenshots_repo import create_screenshot_record, list_screenshots
+from app.db.screenshots_repo import (
+    create_screenshot_record,
+    delete_all_screenshot_records,
+    delete_screenshot_record,
+    list_screenshots,
+)
 from app.db.persona_repo import get_effective_persona, reset_persona_override, save_persona_override
 from app.db.memory_repo import append_exchange, clear_conversation_memory, get_recent_exchanges
 from app.services.scheduler import create_scheduler, schedule_pending_on_startup, schedule_reminder
@@ -34,6 +39,14 @@ class CreateReminderRequest(BaseModel):
 
 class DeleteReminderResponse(BaseModel):
     deleted: bool
+
+
+class DeleteScreenshotResponse(BaseModel):
+    deleted: bool
+
+
+class DeleteAllScreenshotsResponse(BaseModel):
+    deletedCount: int
 
 
 class OcrScreenshotRequest(BaseModel):
@@ -116,6 +129,18 @@ async def get_screenshots(
 ) -> list[dict]:
     # Keep parameter names simple; Electron can map from/to -> from_/to_.
     return list_screenshots(from_iso=from_, to_iso=to_)
+
+
+@app.delete("/screenshots/{screenshot_id}", response_model=DeleteScreenshotResponse)
+async def del_screenshot(screenshot_id: str) -> DeleteScreenshotResponse:
+    deleted = delete_screenshot_record(screenshot_id)
+    return DeleteScreenshotResponse(deleted=deleted)
+
+
+@app.delete("/screenshots", response_model=DeleteAllScreenshotsResponse)
+async def del_all_screenshots() -> DeleteAllScreenshotsResponse:
+    deleted_count = delete_all_screenshot_records()
+    return DeleteAllScreenshotsResponse(deletedCount=deleted_count)
 
 
 @app.post("/screenshots/ocr")

@@ -22,8 +22,8 @@ export const ScreenshotsPage = () => {
   const [windowEnd, setWindowEnd] = useState('');
   const [ocrEngine, setOcrEngine] = useState<OcrEngineStatus | null>(null);
   const [isTiming, setIsTiming] = useState(true);
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const [list, s] = await Promise.all([
         window.assistantApi.screenshots.list(),
@@ -43,13 +43,21 @@ export const ScreenshotsPage = () => {
       setWindowStart(s.windowStart || '');
       setWindowEnd(s.windowEnd || '');
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!status.running) return;
+    const timer = window.setInterval(() => {
+      void refresh({ silent: true });
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [status.running, refresh]);
 
   const handleCaptureNow = async () => {
     setLoading(true);
@@ -80,6 +88,7 @@ export const ScreenshotsPage = () => {
       setStatus(next);
       const windowText = next.windowStart && next.windowEnd ? `，窗口 ${next.windowStart}-${next.windowEnd}` : '';
       message.success(`已开启定时截图（每 ${next.intervalMinutes || intervalMinutes} 分钟${windowText}）`);
+      await refresh({ silent: true });
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : String(error);
       message.error(`启动失败：${errMessage}`);
@@ -258,39 +267,6 @@ export const ScreenshotsPage = () => {
           </Flex>
         </Card>)
       }
-      <Card variant="borderless">
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-          <Space wrap>
-            <InputNumber
-              min={1}
-              max={240}
-              value={intervalMinutes}
-              onChange={(v) => setIntervalMinutes(Number(v || 5))}
-              addonAfter="分钟"
-              style={{ width: 160 }}
-            />
-            <Input
-              placeholder="开始时间 HH:mm（可选）"
-              value={windowStart}
-              onChange={(e) => setWindowStart(e.target.value)}
-              style={{ width: 180 }}
-            />
-            <Input
-              placeholder="结束时间 HH:mm（可选）"
-              value={windowEnd}
-              onChange={(e) => setWindowEnd(e.target.value)}
-              style={{ width: 180 }}
-            />
-          </Space>
-          <Input
-            allowClear
-            placeholder="按 OCR 文本检索轨迹（关键词）"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
-          {status.lastCapturedAt ? <Text type="secondary">最近截图：{status.lastCapturedAt}</Text> : null}
-        </Space>
-      </Card>
 
       <Card variant="borderless">
         {filteredRows.length === 0 ? (

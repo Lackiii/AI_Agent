@@ -20,7 +20,16 @@ const getBackendBaseUrl = (): string => {
 };
 
 export const listScreenshots = async (filter?: ScreenshotListFilter): Promise<ScreenshotRecord[]> => {
-  // Prefer backend; fallback to local in-memory placeholder.
+  const applyFilterAndSort = (rows: ScreenshotRecord[]): ScreenshotRecord[] => {
+    const from = filter?.from;
+    const to = filter?.to;
+    let filtered = rows.slice();
+    if (from) filtered = filtered.filter((r) => r.capturedAt >= from);
+    if (to) filtered = filtered.filter((r) => r.capturedAt <= to);
+    return filtered.sort((a, b) => a.capturedAt.localeCompare(b.capturedAt));
+  };
+
+  // Prefer backend; merge local fallback records to avoid losing transient captures.
   try {
     const baseUrl = getBackendBaseUrl().replace(/\/$/, '');
     const params = new URLSearchParams();
@@ -31,35 +40,37 @@ export const listScreenshots = async (filter?: ScreenshotListFilter): Promise<Sc
     if (!res.ok) throw new Error(`backend error: ${res.status}`);
 
     const data = (await res.json()) as ScreenshotRecord[];
-    return data.slice().sort((a, b) => a.capturedAt.localeCompare(b.capturedAt));
+    const mergedById = new Map<string, ScreenshotRecord>();
+    for (const local of inMemoryTrail) mergedById.set(local.id, local);
+    for (const remote of data) mergedById.set(remote.id, remote);
+    return applyFilterAndSort([...mergedById.values()]);
   } catch {
-    let rows = [...inMemoryTrail];
-    const from = filter?.from;
-    const to = filter?.to;
-    if (from) rows = rows.filter((r) => r.capturedAt >= from);
-    if (to) rows = rows.filter((r) => r.capturedAt <= to);
-    return rows.sort((a, b) => a.capturedAt.localeCompare(b.capturedAt));
+    return applyFilterAndSort([...inMemoryTrail]);
   }
 };
 
 export const removeScreenshot = async (id: string): Promise<boolean> => {
   const screenshotId = String(id ?? '').trim();
   if (!screenshotId) return false;
+  const removeLocal = (): boolean => {
+    const idx = inMemoryTrail.findIndex((r) => r.id === screenshotId);
+    if (idx < 0) return false;
+    inMemoryTrail.splice(idx, 1);
+    return true;
+  };
   try {
     const baseUrl = getBackendBaseUrl().replace(/\/$/, '');
     const res = await fetch(`${baseUrl}/screenshots/${encodeURIComponent(screenshotId)}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`backend error: ${res.status}`);
     const data = (await res.json()) as { deleted?: boolean };
-    if (data.deleted) return true;
+    if (data.deleted) {
+      removeLocal();
+      return true;
+    }
   } catch {
     // fallback to local in-memory trail
   }
-  const idx = inMemoryTrail.findIndex((r) => r.id === screenshotId);
-  if (idx >= 0) {
-    inMemoryTrail.splice(idx, 1);
-    return true;
-  }
-  return false;
+  return removeLocal();
 };
 
 export const removeAllScreenshots = async (): Promise<number> => {
@@ -69,7 +80,9 @@ export const removeAllScreenshots = async (): Promise<number> => {
     if (!res.ok) throw new Error(`backend error: ${res.status}`);
     const data = (await res.json()) as { deletedCount?: number };
     if (Number.isFinite(data.deletedCount)) {
-      return Number(data.deletedCount);
+      const deletedLocal = inMemoryTrail.length;
+      inMemoryTrail.splice(0, inMemoryTrail.length);
+      return Math.max(Number(data.deletedCount), deletedLocal);
     }
   } catch {
     // fallback to local in-memory trail
@@ -141,18 +154,19 @@ const isInsideCaptureWindow = (now: Date, windowStart?: string, windowEnd?: stri
 
 export const captureScreenshotNow = async (): Promise<ScreenshotRecord> => {
   const capturedAt = new Date().toISOString();
-  const imageBase64 = await capturePrimaryScreenAsDataUrl();
   try {
+    const imageBase64 = await capturePrimaryScreenAsDataUrl();
     const saved = await postScreenshotOcr(imageBase64, capturedAt);
     captureStatus = { ...captureStatus, lastCapturedAt: saved.capturedAt || capturedAt };
     return saved;
-  } catch {
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
     const fallback: ScreenshotRecord = {
       id: `local-${Date.now()}`,
       capturedAt,
       ocrText: '',
       ocrStatus: 'backend_unreachable',
-      ocrError: '后端不可达或 OCR 接口调用失败',
+      ocrError: reason ? `截图或 OCR 失败：${reason}` : '截图或 OCR 失败',
     };
     inMemoryTrail.push(fallback);
     captureStatus = { ...captureStatus, lastCapturedAt: capturedAt };
@@ -180,6 +194,9 @@ export const startScreenshotCapture = (options: ScreenshotCaptureStartOptions): 
     }
     void captureScreenshotNow();
   }, safeInterval * 60 * 1000);
+  if (isInsideCaptureWindow(new Date(), windowStart, windowEnd)) {
+    void captureScreenshotNow();
+  }
   captureStatus = { ...captureStatus, running: true, intervalMinutes: safeInterval, windowStart, windowEnd };
   return captureStatus;
 };
@@ -202,6 +219,16 @@ const toPreview = (v: string | undefined, maxLen = 120): string => {
   const t = v.replace(/\s+/g, ' ').trim();
   if (!t) return '';
   return t.length > maxLen ? `${t.slice(0, maxLen)}...` : t;
+};
+
+const formatLocalDateTime = (isoLike: string): string => {
+  if (!isoLike) return '';
+  const d = new Date(isoLike);
+  if (Number.isNaN(d.getTime())) return isoLike;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(
+    d.getSeconds(),
+  )}`;
 };
 
 export const runScreenshotTool = async (name: string, argsJson: string): Promise<string> => {
@@ -231,6 +258,7 @@ export const runScreenshotTool = async (name: string, argsJson: string): Promise
     const picked = rows.slice(0, limit).map((r) => ({
       id: r.id,
       capturedAt: r.capturedAt,
+      capturedAtLocal: formatLocalDateTime(r.capturedAt),
       ocrStatus: r.ocrStatus || 'unknown',
       ocrTextPreview: toPreview(r.ocrText),
       ocrErrorPreview: toPreview(r.ocrError, 80),
@@ -238,7 +266,7 @@ export const runScreenshotTool = async (name: string, argsJson: string): Promise
     }));
     const timeline = picked.map(
       (x, i) =>
-        `${i + 1}) ${x.capturedAt} | ${x.ocrStatus} | ${x.ocrTextPreview || '（无 OCR 文本）'}${
+        `${i + 1}) ${x.capturedAtLocal} | ${x.ocrStatus} | ${x.ocrTextPreview || '（无 OCR 文本）'}${
           x.ocrErrorPreview ? ` | err=${x.ocrErrorPreview}` : ''
         }`,
     );

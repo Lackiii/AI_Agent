@@ -17,6 +17,7 @@
 | `assistant-persona.json` | `persona-memory.service.ts` | 对话里保存的人设覆盖，字段 `content` | 直接编辑 `content` 后重启应用；删文件 = 用默认 `persona.ts` |
 | `reminders.json` | `reminder.service.ts` | 提醒列表 | 可手改，注意 JSON 结构；更建议用界面或 IPC |
 | `greeting-settings.json` | `greeting-settings.service.ts` | 定时问候开关与间隔（`enabled`、`intervalMode`） | 侧栏「定时问候设置」抽屉会写；删文件 = 恢复默认（关闭、30 分钟档） |
+| `startup-greeting-state.json` | `startup-greeting.service.ts` | 上次触发「启动问候」的本地日期（`lastGreetingLocalDate`），用于同日再次启动时跳过问候链 | 删文件后下次启动视为首次/隔日逻辑重算；不涉及密钥 |
 
 ## 目录：`ai-vault/`（AI 资料夹）
 

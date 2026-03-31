@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { CreateReminderInput, Reminder, ScreenshotListFilter, ScreenshotRecord } from './shared/types/domain';
+import type {
+  CreateReminderInput,
+  OcrEngineStatus,
+  Reminder,
+  ScreenshotCaptureStartOptions,
+  ScreenshotCaptureStatus,
+  ScreenshotListFilter,
+  ScreenshotRecord,
+} from './shared/types/domain';
 import type { GreetingSettingsDTO } from './shared/types/greeting';
 import type { ChatMessage } from './shared/types/llm';
 import type { VaultReadResult } from './shared/types/vault';
@@ -34,6 +42,12 @@ contextBridge.exposeInMainWorld('assistantApi', {
   screenshots: {
     list: (filter?: ScreenshotListFilter) =>
       ipcRenderer.invoke('screenshot:list', filter) as Promise<ScreenshotRecord[]>,
+    captureNow: () => ipcRenderer.invoke('screenshot:captureNow') as Promise<ScreenshotRecord>,
+    start: (options: ScreenshotCaptureStartOptions) =>
+      ipcRenderer.invoke('screenshot:start', options) as Promise<ScreenshotCaptureStatus>,
+    stop: () => ipcRenderer.invoke('screenshot:stop') as Promise<ScreenshotCaptureStatus>,
+    status: () => ipcRenderer.invoke('screenshot:status') as Promise<ScreenshotCaptureStatus>,
+    ocrStatus: () => ipcRenderer.invoke('screenshot:ocrStatus') as Promise<OcrEngineStatus>,
   },
   greeting: {
     getSettings: () => ipcRenderer.invoke('greeting:getSettings') as Promise<GreetingSettingsDTO>,

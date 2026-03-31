@@ -20,13 +20,20 @@ import {
 } from '../persona-memory.service';
 import { extractReminderFromNaturalLanguage, mightContainReminderIntent } from '../reminder-extract.service';
 import { createReminder, deleteReminder, isDuplicateReminder, listReminders } from '../reminder.service';
-import { listScreenshots } from '../screenshot.service';
+import {
+  captureScreenshotNow,
+  getOcrEngineStatus,
+  getScreenshotCaptureStatus,
+  listScreenshots,
+  startScreenshotCapture,
+  stopScreenshotCapture,
+} from '../screenshot.service';
 import { buildLocalDateTimeSystemMessage } from '../datetime-context';
 import { shouldDisableTimedGreeting } from '../greeting-intent-heuristic.service';
 import { notifyGreetingSettingsChange } from '../greeting-notification.service';
 import { getGreetingSettings, setGreetingSettings } from '../greeting-settings.service';
 import { restartGreetingScheduler } from '../greeting-scheduler.service';
-import type { CreateReminderInput, ScreenshotListFilter } from '../../shared/types/domain';
+import type { CreateReminderInput, ScreenshotCaptureStartOptions, ScreenshotListFilter } from '../../shared/types/domain';
 import type { GreetingSettingsDTO } from '../../shared/types/greeting';
 import type { ChatMessage } from '../../shared/types/llm';
 import type { VaultReadResult } from '../../shared/types/vault';
@@ -189,6 +196,11 @@ export const registerIpcHandlers = (): void => {
   ipcMain.removeHandler('reminder:create');
   ipcMain.removeHandler('reminder:delete');
   ipcMain.removeHandler('screenshot:list');
+  ipcMain.removeHandler('screenshot:captureNow');
+  ipcMain.removeHandler('screenshot:start');
+  ipcMain.removeHandler('screenshot:stop');
+  ipcMain.removeHandler('screenshot:status');
+  ipcMain.removeHandler('screenshot:ocrStatus');
   ipcMain.removeHandler('deepseek:chat');
   ipcMain.removeHandler('greeting:getSettings');
   ipcMain.removeHandler('greeting:setSettings');
@@ -224,6 +236,30 @@ export const registerIpcHandlers = (): void => {
 
   ipcMain.handle('screenshot:list', async (_event, filter?: ScreenshotListFilter) => {
     return listScreenshots(filter);
+  });
+
+  ipcMain.handle('screenshot:captureNow', async () => {
+    return captureScreenshotNow();
+  });
+
+  ipcMain.handle('screenshot:start', async (_event, options?: ScreenshotCaptureStartOptions) => {
+    return startScreenshotCapture({
+      intervalMinutes: Number(options?.intervalMinutes ?? 5),
+      windowStart: options?.windowStart,
+      windowEnd: options?.windowEnd,
+    });
+  });
+
+  ipcMain.handle('screenshot:stop', async () => {
+    return stopScreenshotCapture();
+  });
+
+  ipcMain.handle('screenshot:status', async () => {
+    return getScreenshotCaptureStatus();
+  });
+
+  ipcMain.handle('screenshot:ocrStatus', async () => {
+    return getOcrEngineStatus();
   });
 
   ipcMain.handle('greeting:getSettings', async () => getGreetingSettings());

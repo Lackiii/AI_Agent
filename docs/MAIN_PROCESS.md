@@ -29,6 +29,8 @@
 | `src/main-process/greeting-notification.service.ts` | 系统 `Notification`、立即通知工具 | 改通知文案模板 |
 | `src/main-process/greeting-tool.service.ts` | 解析 `greeting_update` 工具参数 | 改 interval 映射 |
 | `src/main-process/assistant-tools.service.ts` | 将模型 tool 名分发到各 `run*Tool` | 新增非 vault 类工具时在此扩展 |
+| `src/main-process/startup-greeting.service.ts` | 启动时（非同日复开）先发载入中通知，再调一次 LLM 生成问候；`china-long-holidays.ts` 提供国庆与春节区间判断 | 改昵称、句式、长假表、同日跳过策略 |
+| `src/main-process/china-long-holidays.ts` | 春节区间表 + 国庆 10/01–10/07，供启动问候判断是否「隔周且跨长假」 | 每年国务院放假安排公布后更新春节日期 |
 
 ## IPC 汇总与对话流水线
 

@@ -6,6 +6,7 @@ import { createMainWindow } from './window';
 import { connectBackendReminderNotifications } from './backend-ws';
 import { sendTestNotification } from './greeting-notification.service';
 import { restartGreetingScheduler } from './greeting-scheduler.service';
+import { runStartupGreetingIfNeeded } from './startup-greeting.service';
 
 // Windows Toast 依赖固定 App User Model ID；未设置时用户即使「允许通知」也可能收不到弹窗
 if (process.platform === 'win32') {
@@ -36,6 +37,10 @@ if (started) {
     createMainWindow();
     connectBackendReminderNotifications();
     restartGreetingScheduler();
+    void runStartupGreetingIfNeeded().catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error('[startup-greeting]', e);
+    });
   });
 }
 

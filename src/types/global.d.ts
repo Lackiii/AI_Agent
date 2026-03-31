@@ -1,4 +1,12 @@
-import type { CreateReminderInput, Reminder, ScreenshotListFilter, ScreenshotRecord } from '../shared/types/domain';
+import type {
+  CreateReminderInput,
+  OcrEngineStatus,
+  Reminder,
+  ScreenshotCaptureStartOptions,
+  ScreenshotCaptureStatus,
+  ScreenshotListFilter,
+  ScreenshotRecord,
+} from '../shared/types/domain';
 import type { GreetingSettingsDTO } from '../shared/types/greeting';
 import type { ChatMessage } from '../shared/types/llm';
 import type { VaultReadResult } from '../shared/types/vault';
@@ -29,6 +37,11 @@ declare global {
       };
       screenshots: {
         list: (filter?: ScreenshotListFilter) => Promise<ScreenshotRecord[]>;
+        captureNow: () => Promise<ScreenshotRecord>;
+        start: (options: ScreenshotCaptureStartOptions) => Promise<ScreenshotCaptureStatus>;
+        stop: () => Promise<ScreenshotCaptureStatus>;
+        status: () => Promise<ScreenshotCaptureStatus>;
+        ocrStatus: () => Promise<OcrEngineStatus>;
       };
       greeting: {
         getSettings: () => Promise<GreetingSettingsDTO>;

@@ -13,7 +13,7 @@ from app.db.screenshots_repo import create_screenshot_record, list_screenshots
 from app.db.persona_repo import get_effective_persona, reset_persona_override, save_persona_override
 from app.db.memory_repo import append_exchange, clear_conversation_memory, get_recent_exchanges
 from app.services.scheduler import create_scheduler, schedule_pending_on_startup, schedule_reminder
-from app.services.ocr_service import run_paddle_ocr
+from app.services.ocr_service import get_ocr_engine_status, run_paddle_ocr
 from app.llm_client import chat_completion
 from app.ws.manager import WebSocketManager
 
@@ -120,14 +120,20 @@ async def get_screenshots(
 
 @app.post("/screenshots/ocr")
 async def ocr_screenshot(req: OcrScreenshotRequest) -> dict:
-    # Best-effort OCR. If PaddleOCR isn't installed, this returns "".
-    ocr_text = await asyncio.to_thread(run_paddle_ocr, req.imageBase64)
+    ocr_result = await asyncio.to_thread(run_paddle_ocr, req.imageBase64)
     record = create_screenshot_record(
         captured_at_iso=req.capturedAt,
         file_path=req.filePath,
-        ocr_text=ocr_text,
+        ocr_text=ocr_result.get("text", ""),
+        ocr_status=ocr_result.get("status", "unknown"),
+        ocr_error=ocr_result.get("error"),
     )
     return record
+
+
+@app.get("/screenshots/ocr/status")
+async def ocr_status() -> dict:
+    return get_ocr_engine_status()
 
 
 @app.websocket(BACKEND_WS_PATH)

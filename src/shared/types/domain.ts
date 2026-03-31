@@ -17,6 +17,8 @@ export type ScreenshotRecord = {
   /** 本地保存路径或占位 */
   filePath?: string;
   ocrText?: string;
+  ocrStatus?: 'ok' | 'no_text' | 'engine_unavailable' | 'ocr_error' | 'backend_unreachable' | 'unknown';
+  ocrError?: string;
 };
 
 export type CreateReminderInput = {
@@ -28,4 +30,26 @@ export type CreateReminderInput = {
 export type ScreenshotListFilter = {
   from?: string;
   to?: string;
+};
+
+export type ScreenshotCaptureStatus = {
+  running: boolean;
+  intervalMinutes?: number;
+  lastCapturedAt?: string;
+  windowStart?: string;
+  windowEnd?: string;
+};
+
+export type ScreenshotCaptureStartOptions = {
+  intervalMinutes: number;
+  /** HH:mm，例如 09:00 */
+  windowStart?: string;
+  /** HH:mm，例如 18:00 */
+  windowEnd?: string;
+};
+
+export type OcrEngineStatus = {
+  available: boolean;
+  engine: string;
+  error?: string;
 };

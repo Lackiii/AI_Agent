@@ -35,7 +35,10 @@ export const connectBackendReminderNotifications = (): void => {
       socket.on('message', (data) => {
         try {
           const text = data.toString('utf8');
-          const msg = JSON.parse(text) as { type?: string; reminder?: any };
+          const msg = JSON.parse(text) as {
+            type?: string;
+            reminder?: { title?: unknown; dueAt?: unknown };
+          };
           if (msg.type !== 'reminder_fired') return;
 
           const reminder = msg.reminder || {};

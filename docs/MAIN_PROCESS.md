@@ -23,7 +23,8 @@
 | `src/main-process/persona-extract.service.ts` | 用 LLM 从用户话里抽「新人设」 | 改触发关键词、system 提示词、JSON 字段 |
 | `src/main-process/reminder.service.ts` | 提醒 CRUD → `reminders.json`（同时 best-effort 同步后端） | 改存储结构、以后换 SQLite 可整文件替换实现 |
 | `src/main-process/reminder-extract.service.ts` | 从对话抽提醒并自动创建 | 改关键词、抽取提示词 |
-| `src/main-process/screenshot.service.ts` | 截图采集/列表/删除/OCR状态与截图工具执行 | 改采集策略（窗口/间隔）、OCR 状态汇总、检索返回字段 |
+| `src/main-process/screenshot.service.ts` | 截图采集/列表/删除/OCR状态与截图工具执行 | 改采集策略（窗口/间隔/裁剪范围）、OCR 状态汇总、检索返回字段 |
+| `src/main-process/region-picker.window.ts` | 全屏透明选框窗口（框选截图裁剪范围） | 选框结果会写入截图采集状态，用于裁剪后再 OCR |
 | `src/main-process/greeting-settings.service.ts` | `greeting-settings.json` 读写 | 改默认间隔枚举 |
 | `src/main-process/greeting-scheduler.service.ts` | 定时触发问候、与 LLM/通知联动 | 改调度策略 |
 | `src/main-process/greeting-notification.service.ts` | 系统 `Notification`、立即通知工具 | 改通知文案模板 |

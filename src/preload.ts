@@ -48,6 +48,14 @@ contextBridge.exposeInMainWorld('assistantApi', {
     stop: () => ipcRenderer.invoke('screenshot:stop') as Promise<ScreenshotCaptureStatus>,
     status: () => ipcRenderer.invoke('screenshot:status') as Promise<ScreenshotCaptureStatus>,
     ocrStatus: () => ipcRenderer.invoke('screenshot:ocrStatus') as Promise<OcrEngineStatus>,
+    pickRegion: () =>
+      ipcRenderer.invoke('screenshot:pickRegion') as Promise<
+        { x: number; y: number; width: number; height: number } | null
+      >,
+    clearRegion: () => ipcRenderer.invoke('screenshot:region:clear') as Promise<ScreenshotCaptureStatus>,
+    submitPickRegion: (region: { x: number; y: number; width: number; height: number } | null) =>
+      ipcRenderer.invoke('screenshot:pickRegion:submit', region) as Promise<boolean>,
+    cancelPickRegion: () => ipcRenderer.invoke('screenshot:pickRegion:cancel') as Promise<boolean>,
     remove: (id: string) => ipcRenderer.invoke('screenshot:delete', id) as Promise<boolean>,
     removeAll: () => ipcRenderer.invoke('screenshot:deleteAll') as Promise<number>,
   },

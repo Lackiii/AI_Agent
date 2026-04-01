@@ -27,9 +27,11 @@ import {
   listScreenshots,
   removeAllScreenshots,
   removeScreenshot,
+  setScreenshotCaptureRegion,
   startScreenshotCapture,
   stopScreenshotCapture,
 } from '../screenshot.service';
+import { openRegionPickerWindow, submitRegionPick } from '../region-picker.window';
 import { buildLocalDateTimeSystemMessage } from '../datetime-context';
 import { shouldDisableTimedGreeting } from '../greeting-intent-heuristic.service';
 import { notifyGreetingSettingsChange } from '../greeting-notification.service';
@@ -43,6 +45,9 @@ import type { VaultReadResult } from '../../shared/types/vault';
 const MEMORY_WINDOW = 20;
 const SCREENSHOT_CONTEXT_RECENT_LIMIT = 8;
 const SCREENSHOT_CONTEXT_MATCH_LIMIT = 5;
+const SCREENSHOT_CONTEXT_PREVIEW_MAX_LEN = 220;
+const SCREENSHOT_CONTEXT_MATCH_SNIPPET_MAX_LEN = 900;
+const SCREENSHOT_CONTEXT_RECENT_SNIPPET_MAX_LEN = 420;
 
 const SCREENSHOT_STOP_WORDS = new Set([
   '这个',
@@ -80,11 +85,18 @@ const SCREENSHOT_STOP_WORDS = new Set([
   'screenshot',
 ]);
 
-const toTextPreview = (text: string | undefined, maxLen = 90): string => {
+const toTextPreview = (text: string | undefined, maxLen = SCREENSHOT_CONTEXT_PREVIEW_MAX_LEN): string => {
   if (!text) return '（无 OCR 文本）';
   const compact = text.replace(/\s+/g, ' ').trim();
   if (!compact) return '（无 OCR 文本）';
   return compact.length > maxLen ? `${compact.slice(0, maxLen)}...` : compact;
+};
+
+const toTextSnippet = (text: string | undefined, maxLen: number): string => {
+  if (!text) return '';
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  return t.length > maxLen ? `${t.slice(0, maxLen)}...` : t;
 };
 
 const formatLocalDateTime = (isoLike: string): string => {
@@ -147,6 +159,24 @@ const buildScreenshotContextMessage = async (prompt: string): Promise<string> =>
         r.ocrError ? ` | err=${toTextPreview(r.ocrError, 60)}` : ''
       }`,
   );
+
+  // Provide longer OCR snippets for better grounding (still capped to avoid blowing up context).
+  const matchedSnippets = matched
+    .map((r, i) => {
+      const snip = toTextSnippet(r.ocrText, SCREENSHOT_CONTEXT_MATCH_SNIPPET_MAX_LEN);
+      if (!snip) return null;
+      return `${i + 1}. ${formatLocalDateTime(r.capturedAt)}\n${snip}`;
+    })
+    .filter(Boolean) as string[];
+
+  const recentSnippets = recent
+    .slice(0, 2)
+    .map((r, i) => {
+      const snip = toTextSnippet(r.ocrText, SCREENSHOT_CONTEXT_RECENT_SNIPPET_MAX_LEN);
+      if (!snip) return null;
+      return `${i + 1}. ${formatLocalDateTime(r.capturedAt)}\n${snip}`;
+    })
+    .filter(Boolean) as string[];
   const statusText = Object.entries(statusCounter)
     .map(([k, v]) => `${k}:${v}`)
     .join(', ');
@@ -160,6 +190,8 @@ const buildScreenshotContextMessage = async (prompt: string): Promise<string> =>
     ...(matchedLines.length
       ? ['- 与当前问题相关的截图命中：', ...matchedLines]
       : ['- 与当前问题相关的截图命中：无']),
+    ...(matchedSnippets.length ? ['- 命中截图的 OCR 原文片段（截断版）：', ...matchedSnippets] : []),
+    ...(matchedSnippets.length === 0 && recentSnippets.length ? ['- 最近截图的 OCR 原文片段（截断版）：', ...recentSnippets] : []),
     '当用户问“我刚刚在做什么/报错是什么/哪一步失败”时，优先基于以上截图轨迹回答；若证据不足请明确说明不确定。',
     '若最近截图反复出现 error/exception/fail/traceback 等信息，可在回复中主动给出简短排查建议（1-3 条）。',
   ].join('\n');
@@ -334,6 +366,10 @@ export const registerIpcHandlers = (): void => {
   ipcMain.removeHandler('screenshot:ocrStatus');
   ipcMain.removeHandler('screenshot:delete');
   ipcMain.removeHandler('screenshot:deleteAll');
+  ipcMain.removeHandler('screenshot:pickRegion');
+  ipcMain.removeHandler('screenshot:pickRegion:submit');
+  ipcMain.removeHandler('screenshot:pickRegion:cancel');
+  ipcMain.removeHandler('screenshot:region:clear');
   ipcMain.removeHandler('deepseek:chat');
   ipcMain.removeHandler('greeting:getSettings');
   ipcMain.removeHandler('greeting:setSettings');
@@ -401,6 +437,29 @@ export const registerIpcHandlers = (): void => {
 
   ipcMain.handle('screenshot:deleteAll', async () => {
     return removeAllScreenshots();
+  });
+
+  ipcMain.handle('screenshot:pickRegion', async () => {
+    const picked = await openRegionPickerWindow();
+    if (picked) {
+      setScreenshotCaptureRegion(picked);
+    }
+    return picked;
+  });
+
+  ipcMain.handle('screenshot:pickRegion:submit', async (_event, region) => {
+    const r = region as { x: number; y: number; width: number; height: number } | null;
+    submitRegionPick(r);
+    return true;
+  });
+
+  ipcMain.handle('screenshot:pickRegion:cancel', async () => {
+    submitRegionPick(null);
+    return true;
+  });
+
+  ipcMain.handle('screenshot:region:clear', async () => {
+    return setScreenshotCaptureRegion(undefined);
   });
 
   ipcMain.handle('greeting:getSettings', async () => getGreetingSettings());

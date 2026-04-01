@@ -16,7 +16,9 @@ export const runAssistantTool = async (name: string, argsJson: string): Promise<
         queueMicrotask(() => {
           void import('./greeting-scheduler.service')
             .then((m) => m.restartGreetingScheduler())
-            .catch(() => {});
+            .catch((error) => {
+              console.warn('[greeting] Failed to restart scheduler after greeting_update tool:', error);
+            });
         });
       }
     } catch {

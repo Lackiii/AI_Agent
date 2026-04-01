@@ -28,6 +28,10 @@ Electron 安全模型下：**渲染进程默认不信任**，敏感能力放在*
 | `assistantApi.screenshots.stop()` | `screenshot:stop` | 停止定时截图 |
 | `assistantApi.screenshots.status()` | `screenshot:status` | 获取采集状态（运行中、间隔、窗口、最近截图时间） |
 | `assistantApi.screenshots.ocrStatus()` | `screenshot:ocrStatus` | OCR 引擎可用性状态 |
+| `assistantApi.screenshots.pickRegion()` | `screenshot:pickRegion` | 打开交互式选框窗口，返回裁剪范围（用于去掉浏览器标签栏/地址栏等噪声） |
+| `assistantApi.screenshots.clearRegion()` | `screenshot:region:clear` | 清除裁剪范围，恢复全屏 OCR |
+| `assistantApi.screenshots.submitPickRegion(region)` | `screenshot:pickRegion:submit` | 选框页内部提交选区（一般不在业务页直接调用） |
+| `assistantApi.screenshots.cancelPickRegion()` | `screenshot:pickRegion:cancel` | 选框页内部取消（一般不在业务页直接调用） |
 | `assistantApi.screenshots.remove(id)` | `screenshot:delete` | 删除单条截图记录 |
 | `assistantApi.screenshots.removeAll()` | `screenshot:deleteAll` | 删除全部截图记录 |
 | `assistantApi.greeting.getSettings / setSettings` | `greeting:getSettings` / `greeting:setSettings` | 定时问候开关与间隔；保存后会重启主进程调度 |

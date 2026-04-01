@@ -42,6 +42,10 @@ declare global {
         stop: () => Promise<ScreenshotCaptureStatus>;
         status: () => Promise<ScreenshotCaptureStatus>;
         ocrStatus: () => Promise<OcrEngineStatus>;
+        pickRegion: () => Promise<{ x: number; y: number; width: number; height: number } | null>;
+        clearRegion: () => Promise<ScreenshotCaptureStatus>;
+        submitPickRegion: (region: { x: number; y: number; width: number; height: number } | null) => Promise<boolean>;
+        cancelPickRegion: () => Promise<boolean>;
         remove: (id: string) => Promise<boolean>;
         removeAll: () => Promise<number>;
       };

@@ -1,5 +1,5 @@
-import Icon, { CameraOutlined, ClockCircleFilled, ClockCircleOutlined, DeleteOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import { App, Button, Card, Empty, Flex, Input, InputNumber, List, Popconfirm, Space, Tag, Typography } from 'antd';
+import { CameraOutlined, ClockCircleFilled, ClockCircleOutlined, DatabaseOutlined, DeleteOutlined, DownOutlined, FullscreenExitOutlined, FullscreenOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Card, Dropdown, Empty, Flex, Input, InputNumber, List, MenuProps, Popconfirm, Space, Tag, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import type { OcrEngineStatus, ScreenshotCaptureStatus, ScreenshotRecord } from '../../../shared/types/domain';
 import './ScreenshotsPage.css';
@@ -12,7 +12,7 @@ const formatLocalDateTime = (iso: string): string => {
 };
 
 export const ScreenshotsPage = () => {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [rows, setRows] = useState<ScreenshotRecord[]>([]);
   const [status, setStatus] = useState<ScreenshotCaptureStatus>({ running: false });
   const [loading, setLoading] = useState(false);
@@ -68,6 +68,38 @@ export const ScreenshotsPage = () => {
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : String(error);
       message.error(`立即截图失败：${errMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePickRegion = async () => {
+    setLoading(true);
+    try {
+      const picked = await window.assistantApi.screenshots.pickRegion();
+      if (!picked) {
+        message.info('已取消框选');
+        return;
+      }
+      message.success(`已设置截图范围：x=${picked.x}, y=${picked.y}, w=${picked.width}, h=${picked.height}`);
+      await refresh({ silent: true });
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      message.error(`框选失败：${errMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearRegion = async () => {
+    setLoading(true);
+    try {
+      await window.assistantApi.screenshots.clearRegion();
+      message.success('已清除截图范围（恢复全屏 OCR）');
+      await refresh({ silent: true });
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      message.error(`清除失败：${errMessage}`);
     } finally {
       setLoading(false);
     }
@@ -162,6 +194,47 @@ export const ScreenshotsPage = () => {
     return 'default';
   };
 
+  const handleDeleteAllConfirm = () => {
+    modal.confirm({
+      title: '确定清空所有截图记录？',
+      content: '清空后不可恢复。',
+      okText: '清空',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => handleDeleteAll(),
+    });
+  };
+
+  const toolMenuItems: MenuProps['items'] = [{
+    key: 'vault',
+    label: '框选范围',
+    icon: <FullscreenExitOutlined />,
+    onClick: () => void handlePickRegion(),
+    disabled: loading
+  },
+  {
+    key: 'clear',
+    label: '清除范围',
+    icon: <FullscreenOutlined />,
+    disabled: !status.captureRegion || loading,
+    onClick: () => void handleClearRegion(),
+  },
+  {
+    key: 'time',
+    label: '定时截图',
+    icon: isTiming ? <ClockCircleFilled /> : <ClockCircleOutlined />,
+    onClick: () => setIsTiming(!isTiming)
+  },
+  {
+    key: 'delete',
+    label: '一键删除',
+    icon: <DeleteOutlined />,
+    onClick: () => void handleDeleteAllConfirm(),
+    disabled: loading,
+    danger: true,
+  }
+  ]
+
   return (
     <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <div>
@@ -187,33 +260,36 @@ export const ScreenshotsPage = () => {
       </div>
 
       <Card variant="borderless">
-        <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+        <Flex wrap="wrap" gap="small" justify="space-between">
+          <Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>
+            刷新
+          </Button>
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>
-              刷新
-            </Button>
+            <Dropdown
+              menu={{ items: toolMenuItems }}
+              placement="bottomRight"
+              trigger={['click']}
+            >
+              <Button icon={<DatabaseOutlined />}>
+                工具箱 <DownOutlined />
+              </Button>
+            </Dropdown>
             <Button icon={<CameraOutlined />} onClick={() => void handleCaptureNow()} loading={loading}>
               立即截图
             </Button>
-            <Button icon={isTiming ? <ClockCircleFilled /> : <ClockCircleOutlined />} onClick={() => setIsTiming(!isTiming)}>定时截图</Button>
-            <Popconfirm
-              title="删除全部截图记录？"
-              description="此操作不可恢复"
-              okText="全部删除"
-              okButtonProps={{ danger: true }}
-              cancelText="取消"
-              onConfirm={() => void handleDeleteAll()}
-            >
-              <Button danger>一键删除</Button>
-            </Popconfirm>
           </Space>
-          <Text type="secondary">
-            状态：
-            {status.running
-              ? `运行中（每 ${status.intervalMinutes || 5} 分钟${status.windowStart && status.windowEnd ? `，${status.windowStart}-${status.windowEnd}` : ''
-              }）`
-              : '已停止'}
-          </Text>
+        </Flex>
+        <Space style={{ paddingTop: 8 }}>
+        <Text type="secondary">
+          状态：
+          {status.running
+            ? `运行中（每 ${status.intervalMinutes || 5} 分钟${status.windowStart && status.windowEnd ? `，${status.windowStart}-${status.windowEnd}` : ''
+            }）`
+            : '已停止'}
+          {status.captureRegion
+            ? `，范围 x=${status.captureRegion.x} y=${status.captureRegion.y} w=${status.captureRegion.width} h=${status.captureRegion.height}`
+            : '，范围=全屏'}
+        </Text>
         </Space>
       </Card>
 
@@ -254,7 +330,7 @@ export const ScreenshotsPage = () => {
               </Text>
             ) : null}
           </Space>
-          <Flex justify="end">
+          <Flex justify="end" style={{ marginTop: 8 }}>
             {status.running ? (
               <Button danger icon={<PauseCircleOutlined />} onClick={() => void handleStop()} loading={loading}>
                 停止定时截图

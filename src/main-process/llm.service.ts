@@ -171,7 +171,7 @@ const toApiMessage = (m: ChatMessage): Record<string, unknown> => {
 };
 
 const postChat = async (body: Record<string, unknown>): Promise<ChatCompletionResponse> => {
-  const { apiKey, baseUrl, model } = getLlmConfig();
+  const { apiKey, baseUrl } = getLlmConfig();
   if (!apiKey) {
     throw new Error('LLM_API_KEY is missing.');
   }

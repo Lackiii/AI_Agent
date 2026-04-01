@@ -38,6 +38,12 @@ export type ScreenshotCaptureStatus = {
   lastCapturedAt?: string;
   windowStart?: string;
   windowEnd?: string;
+  captureRegion?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 };
 
 export type ScreenshotCaptureStartOptions = {
@@ -46,6 +52,17 @@ export type ScreenshotCaptureStartOptions = {
   windowStart?: string;
   /** HH:mm，例如 18:00 */
   windowEnd?: string;
+  /**
+   * 截图裁剪范围（可选）。
+   * 坐标系基于 `desktopCapturer` 的缩略图尺寸（当前实现固定请求 1600x900）。
+   * 例如要裁掉顶部标签/地址栏，可设置 y>0、height 更小。
+   */
+  captureRegion?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 };
 
 export type OcrEngineStatus = {

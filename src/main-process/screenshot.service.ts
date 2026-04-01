@@ -14,6 +14,14 @@ import type {
 const inMemoryTrail: ScreenshotRecord[] = [];
 let captureTimer: NodeJS.Timeout | null = null;
 let captureStatus: ScreenshotCaptureStatus = { running: false };
+let captureRegion:
+  | {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }
+  | undefined;
 
 const getBackendBaseUrl = (): string => {
   return process.env.BACKEND_BASE_URL?.trim() || 'http://127.0.0.1:8000';
@@ -118,6 +126,8 @@ export const getOcrEngineStatus = async (): Promise<OcrEngineStatus> => {
   return (await res.json()) as OcrEngineStatus;
 };
 
+const clampInt = (v: number): number => Math.max(0, Math.floor(Number(v) || 0));
+
 const capturePrimaryScreenAsDataUrl = async (): Promise<string> => {
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
@@ -128,7 +138,25 @@ const capturePrimaryScreenAsDataUrl = async (): Promise<string> => {
     throw new Error('No screen source found');
   }
   const source = sources[0];
-  return source.thumbnail.toDataURL();
+  let img = source.thumbnail;
+
+  // Crop before OCR to avoid browser chrome/noise.
+  if (captureRegion) {
+    const imgSize = img.getSize();
+    const x = clampInt(captureRegion.x);
+    const y = clampInt(captureRegion.y);
+    const w = clampInt(captureRegion.width);
+    const h = clampInt(captureRegion.height);
+
+    // Ensure inside bounds and minimum area.
+    const width = Math.min(w, Math.max(0, imgSize.width - x));
+    const height = Math.min(h, Math.max(0, imgSize.height - y));
+    if (width >= 20 && height >= 20) {
+      img = img.crop({ x, y, width, height });
+    }
+  }
+
+  return img.toDataURL();
 };
 
 const isValidHm = (v?: string): boolean => {
@@ -179,6 +207,7 @@ export const startScreenshotCapture = (options: ScreenshotCaptureStartOptions): 
     Number.isFinite(options.intervalMinutes) && options.intervalMinutes > 0 ? options.intervalMinutes : 5;
   const windowStart = options.windowStart?.trim() || undefined;
   const windowEnd = options.windowEnd?.trim() || undefined;
+  captureRegion = options.captureRegion;
   if ((windowStart && !windowEnd) || (!windowStart && windowEnd)) {
     throw new Error('采集窗口需同时设置开始与结束时间');
   }
@@ -197,7 +226,14 @@ export const startScreenshotCapture = (options: ScreenshotCaptureStartOptions): 
   if (isInsideCaptureWindow(new Date(), windowStart, windowEnd)) {
     void captureScreenshotNow();
   }
-  captureStatus = { ...captureStatus, running: true, intervalMinutes: safeInterval, windowStart, windowEnd };
+  captureStatus = {
+    ...captureStatus,
+    running: true,
+    intervalMinutes: safeInterval,
+    windowStart,
+    windowEnd,
+    captureRegion,
+  };
   return captureStatus;
 };
 
@@ -206,11 +242,34 @@ export const stopScreenshotCapture = (): ScreenshotCaptureStatus => {
     clearInterval(captureTimer);
     captureTimer = null;
   }
-  captureStatus = { ...captureStatus, running: false, intervalMinutes: undefined, windowStart: undefined, windowEnd: undefined };
+  captureRegion = undefined;
+  captureStatus = {
+    ...captureStatus,
+    running: false,
+    intervalMinutes: undefined,
+    windowStart: undefined,
+    windowEnd: undefined,
+    captureRegion: undefined,
+  };
   return captureStatus;
 };
 
 export const getScreenshotCaptureStatus = (): ScreenshotCaptureStatus => {
+  return { ...captureStatus };
+};
+
+export const setScreenshotCaptureRegion = (
+  region:
+    | {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }
+    | undefined,
+): ScreenshotCaptureStatus => {
+  captureRegion = region;
+  captureStatus = { ...captureStatus, captureRegion: region };
   return { ...captureStatus };
 };
 

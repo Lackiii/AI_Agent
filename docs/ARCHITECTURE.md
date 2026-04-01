@@ -12,7 +12,7 @@
 | AI 资料夹（随笔/笔记） | `src/main-process/ai-vault.service.ts`、`vault:*` IPC | 数据在 `userData/ai-vault/` 下；模型工具 **`vault_list` / `vault_read` / `vault_write` / `vault_delete`**（见 `llm.service.ts` + `runVaultTool`）。前端对话页可查看列表、预览、**删除**文件（与工具删除共用同一套路径校验）。 |
 | 提醒记录 | `src/main-process/reminder.service.ts`、`reminder:*` IPC | 本地 `userData/reminders.json`，前端 `src/renderer/features/reminders/`。对话中含「提醒」等关键词时，主进程会通过 `reminder-extract.service.ts` 调用 LLM 抽取事项与时间并自动 `createReminder`。 |
 | 定时问候 + 通知 | `greeting-settings.service.ts`、`greeting-scheduler.service.ts`、`greeting-notification.service.ts`、`greeting-tool.service.ts` | 设置存 `greeting-settings.json`；到点或用户通过工具 **`greeting_update`** 调整间隔。可调用 **`notification_show`** 立即弹出系统通知。测试通知 IPC 见下文 `greeting:testNotification`（在 `bootstrap.ts` 注册）。 |
-| 定时截图 + OCR + 轨迹检索 | `src/main-process/screenshot.service.ts`、`screenshot:*` IPC | 已支持立即截图、定时采集（窗口/间隔，开启后窗口内会先立即采集一次）、OCR 状态可观测、单条/全部删除；后端异常时可回退本地内存记录并与后端列表合并展示。对话链路接入 `screenshot_search` 工具用于“基于截图证据回答”，时间线按本地时间组织。 |
+| 定时截图 + OCR + 轨迹检索 | `src/main-process/screenshot.service.ts`、`screenshot:*` IPC | 已支持立即截图、定时采集（窗口/间隔，开启后窗口内会先立即采集一次）、**交互式框选 OCR 裁剪范围**（避免浏览器标签栏/地址栏噪声）、OCR 状态可观测、单条/全部删除；后端异常时可回退本地内存记录并与后端列表合并展示。对话链路接入 `screenshot_search` 工具用于“基于截图证据回答”，时间线按本地时间组织。 |
 | 前端界面 | `src/renderer/` | React + TypeScript + `react-router-dom`（Hash 路由）+ **Ant Design**（`ConfigProvider` 主题、`Layout`/`Menu`/`Card` 等，见 `docs/llms.txt` 索引）。含**对话历史**页、**定时问候设置**侧栏抽屉等。 |
 
 ## 目录结构（摘要）

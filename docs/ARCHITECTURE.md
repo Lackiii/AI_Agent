@@ -2,7 +2,7 @@
 
 > **各模块「怎么改」**：见 **[docs/README.md](./README.md)** 中的分文档索引。
 
-开题报告《基于 ChatGLM 的智能记忆聊天助手设计与实现》中的系统能力，在本 Electron 桌面端按**模块边界**落地为下列结构，便于后续接入 **FastAPI + SQLite + WebSocket + APScheduler + PaddleOCR** 等后端能力。
+开题报告《基于大语言模型的智能记忆聊天助手设计与实现》中的系统能力，在本 Electron 桌面端按**模块边界**落地为下列结构，便于后续接入 **FastAPI + SQLite + WebSocket + APScheduler + PaddleOCR** 等后端能力。
 
 ## 功能模块 ↔ 代码位置
 

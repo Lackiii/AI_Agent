@@ -18,7 +18,7 @@ Electron 安全模型下：**渲染进程默认不信任**，敏感能力放在*
 | --- | --- | --- |
 | `assistantApi.llm.chat(text)` | `llm:chat` | 人设/提醒处理 + 带记忆对话；模型可调用资料夹、问候、通知等工具 |
 | `assistantApi.memory.clear()` | `memory:clear` | 清空 `conversation-memory.json` |
-| `assistantApi.memory.list()` | `memory:list` | 只读返回已存对话消息数组 |
+| `assistantApi.memory.list()` | `memory:list` | 只读返回已存对话消息数组（每条含 `id`、`role`、`content`、`createdAt` 本地时间） |
 | `assistantApi.memory.remove(id)` | `memory:remove` | 按 id 删除单条对话消息 |
 | `assistantApi.persona.reset()` | `persona:reset` | 删除 `assistant-persona.json`，恢复默认人设 |
 | `assistantApi.reminders.list/create/remove` | `reminder:*` | 读写 `reminders.json`（创建时可能同步后端） |

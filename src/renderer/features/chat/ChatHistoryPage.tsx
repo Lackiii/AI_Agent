@@ -8,6 +8,13 @@ import './ChatHistoryPage.css';
 
 const { Title, Paragraph, Text } = Typography;
 
+const formatLocalDateTime = (iso?: string): string => {
+  if (!iso) return '未知时间';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('zh-CN', { hour12: false });
+};
+
 export const ChatHistoryPage = () => {
   const navigate = useNavigate();
   const { message } = App.useApp();
@@ -87,6 +94,7 @@ export const ChatHistoryPage = () => {
                       <Tag color={item.role === 'user' ? 'blue' : 'green'}>
                         {item.role === 'user' ? '你' : '助手'}
                       </Tag>
+                      <Text type="secondary">{formatLocalDateTime(item.createdAt)}</Text>
                     </Space>
                     {item.id ? (
                       <span className="chat-history-delete-wrap" style={{ flexShrink: 0 }}>

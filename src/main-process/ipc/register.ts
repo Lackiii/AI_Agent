@@ -8,6 +8,7 @@ import {
   clearConversationMemory,
   getConversationHistory,
   getRecentConversation,
+  getRecentConversationWithTimestamp,
   removeMessageById,
 } from '../memory.service';
 import { takePendingNotifications } from '../notification-memory-queue';
@@ -107,6 +108,76 @@ const formatLocalDateTime = (isoLike: string): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(
     d.getSeconds(),
   )}`;
+};
+
+const formatDurationForHuman = (fromMs: number, toMs: number): string => {
+  const delta = Math.max(0, toMs - fromMs);
+  const totalMinutes = Math.floor(delta / 60000);
+  if (totalMinutes < 1) return '不到1分钟';
+  if (totalMinutes < 60) return `${totalMinutes}分钟`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 24) {
+    return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`;
+  }
+  const days = Math.floor(hours / 24);
+  const restHours = hours % 24;
+  if (restHours > 0) return `${days}天${restHours}小时`;
+  return `${days}天`;
+};
+
+const toPreviewText = (text: string | null | undefined, maxLen = 42): string => {
+  const compact = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!compact) return '（空）';
+  return compact.length > maxLen ? `${compact.slice(0, maxLen)}...` : compact;
+};
+
+const buildConversationTimingContext = (history: ChatMessage[]): string => {
+  const now = Date.now();
+  const userTurns = history.filter((m) => m.role === 'user' && typeof m.content === 'string' && m.content.trim());
+  const lastRecord = history[history.length - 1];
+  const lastUser = userTurns[userTurns.length - 1];
+  const prevUser = userTurns.length >= 2 ? userTurns[userTurns.length - 2] : undefined;
+
+  const lines: string[] = [
+    '对话时间上下文（本地时间，供语气与时距判断使用）：',
+    `- 当前时间：${formatLocalDateTime(new Date().toISOString())}`,
+  ];
+
+  const lastRecordMs = lastRecord?.createdAt ? Date.parse(lastRecord.createdAt) : NaN;
+  if (!Number.isNaN(lastRecordMs)) {
+    lines.push(
+      `- 上一条历史消息时间：${formatLocalDateTime(lastRecord!.createdAt as string)}（距今 ${formatDurationForHuman(lastRecordMs, now)}）`,
+    );
+  } else {
+    lines.push('- 上一条历史消息时间：无可用记录');
+  }
+
+  const lastUserMs = lastUser?.createdAt ? Date.parse(lastUser.createdAt) : NaN;
+  if (!Number.isNaN(lastUserMs)) {
+    lines.push(
+      `- 上一次用户发言：${formatLocalDateTime(lastUser!.createdAt as string)}（距今 ${formatDurationForHuman(lastUserMs, now)}）`,
+    );
+    lines.push(`- 上一次用户发言内容摘要：${toPreviewText(lastUser?.content)}`);
+  } else {
+    lines.push('- 上一次用户发言：无可用记录');
+  }
+
+  const prevUserMs = prevUser?.createdAt ? Date.parse(prevUser.createdAt) : NaN;
+  if (!Number.isNaN(lastUserMs) && !Number.isNaN(prevUserMs)) {
+    lines.push(
+      `- 最近两次用户发言间隔：${formatDurationForHuman(prevUserMs, lastUserMs)}（${formatLocalDateTime(
+        prevUser!.createdAt as string,
+      )} -> ${formatLocalDateTime(lastUser!.createdAt as string)}）`,
+    );
+  }
+
+  lines.push(
+    '当用户询问“上一次对话是什么时候/多久没聊了”等时间类问题时，必须基于以上信息作答；不要编造。',
+    '当用户表达负面情绪且与上次发言间隔较久（如>=1小时），可自然提一句间隔时间并做关心跟进；语气自然，不要机械。',
+    '不要在每次回复里主动附加固定时间戳，只有用户询问或语境需要时才提及时间。',
+  );
+  return lines.join('\n');
 };
 
 const extractPromptKeywords = (prompt: string): string[] => {
@@ -299,9 +370,11 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   }
 
   const history = getRecentConversation(MEMORY_WINDOW);
+  const historyWithTime = getRecentConversationWithTimestamp(MEMORY_WINDOW);
   const messages: ChatMessage[] = [{ role: 'system', content: getEffectivePersona() }];
 
   messages.push({ role: 'system', content: buildLocalDateTimeSystemMessage() });
+  messages.push({ role: 'system', content: buildConversationTimingContext(historyWithTime) });
   try {
     messages.push({ role: 'system', content: await buildScreenshotContextMessage(trimmed) });
   } catch {
@@ -325,7 +398,7 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
     });
   }
 
-  messages.push(...history, { role: 'user', content: trimmed });
+  messages.push(...history.map(({ role, content }) => ({ role, content })), { role: 'user', content: trimmed });
 
   // 仅在“重复/过时”场景短路，避免把固定文案夹杂进主回复里。
   if (reminderShouldShortReply) {

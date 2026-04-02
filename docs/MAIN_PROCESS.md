@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | `src/main-process/llm.service.ts` | OpenAI 兼容 `POST /chat/completions` + **工具定义**（`vault_*`、`greeting_update`、`notification_show`、`screenshot_search`） | 换路径、加 `max_tokens`、默认 `temperature`、增删工具 |
 | `src/main-process/datetime-context.ts` | 为对话拼装「当前本地时间」类 system 片段 | 改时区展示格式、是否注入 |
-| `src/main-process/memory.service.ts` | 对话轮次写入 `userData/conversation-memory.json` | 改保存条数上限、文件格式 |
+| `src/main-process/memory.service.ts` | 对话轮次写入 `userData/conversation-memory.json`（含每条消息本地时间 `createdAt`） | 改保存条数上限、时间格式、文件结构 |
 | `src/main-process/ai-vault.service.ts` | `userData/ai-vault` 下列表/读/写/删、`runVaultTool` | 改单文件大小上限、是否 prune 空目录 |
 | `src/main-process/persona-memory.service.ts` | 人设覆盖文件 `assistant-persona.json` | 改文件名、是否与默认人设合并而非覆盖 |
 | `src/main-process/persona-extract.service.ts` | 用 LLM 从用户话里抽「新人设」 | 改触发关键词、system 提示词、JSON 字段 |
@@ -38,7 +38,7 @@
 **统一注册处：** `src/main-process/ipc/register.ts`（另见 **`bootstrap.ts`** 中 `greeting:testNotification`）。
 
 - 绝大多数 `ipcMain.handle('xxx', …)` 在 `register.ts`。
-- **`handleLlmChat` 顺序很重要**：先 `tryResetPersonaFromUserPhrase` → 再人设抽取保存 → 再提醒抽取 → 再拼 system（含本地时间 + 截图轨迹上下文）→ 主对话 → 拼接 footer。
+- **`handleLlmChat` 顺序很重要**：先 `tryResetPersonaFromUserPhrase` → 再人设抽取保存 → 再提醒抽取 → 再拼 system（含本地时间 + 对话时间间隔上下文 + 截图轨迹上下文）→ 主对话 → 拼接 footer。
 
 要**改对话行为**（例如少调一次 LLM、改 footer 文案）：主要改这个文件 + 上面对应 `*-extract.service.ts`。
 

@@ -8,7 +8,7 @@
 
 | 报告模块 | 当前实现 | 说明 |
 | --- | --- | --- |
-| 智能对话 + 记忆 | `src/main-process/memory.service.ts`、`ipc/register.ts`（`llm:chat`） | **人设**：默认 `src/config/persona.ts`；用户可在对话中描述人设，经 `persona-extract.service.ts` 解析后写入 `userData/assistant-persona.json`，由 `persona-memory.service.ts` 覆盖默认。对话轮次记忆存 `conversation-memory.json`。对话请求会附带 **`datetime-context.ts`** 注入的本地日期时间，减少模型对「今天」等表述的偏差。 |
+| 智能对话 + 记忆 | `src/main-process/memory.service.ts`、`ipc/register.ts`（`llm:chat`） | **人设**：默认 `src/config/persona.ts`；用户可在对话中描述人设，经 `persona-extract.service.ts` 解析后写入 `userData/assistant-persona.json`，由 `persona-memory.service.ts` 覆盖默认。对话轮次记忆存 `conversation-memory.json`（每条消息含 `createdAt` 本地时间）。对话请求会附带 **`datetime-context.ts`** 的本地日期时间，以及“最近对话时间间隔”上下文，便于回答“上次聊到什么时候/多久没聊了”。 |
 | AI 资料夹（随笔/笔记） | `src/main-process/ai-vault.service.ts`、`vault:*` IPC | 数据在 `userData/ai-vault/` 下；模型工具 **`vault_list` / `vault_read` / `vault_write` / `vault_delete`**（见 `llm.service.ts` + `runVaultTool`）。前端对话页可查看列表、预览、**删除**文件（与工具删除共用同一套路径校验）。 |
 | 提醒记录 | `src/main-process/reminder.service.ts`、`reminder:*` IPC | 本地 `userData/reminders.json`，前端 `src/renderer/features/reminders/`。对话中含「提醒」等关键词时，主进程会通过 `reminder-extract.service.ts` 调用 LLM 抽取事项与时间并自动 `createReminder`。 |
 | 定时问候 + 通知 | `greeting-settings.service.ts`、`greeting-scheduler.service.ts`、`greeting-notification.service.ts`、`greeting-tool.service.ts` | 设置存 `greeting-settings.json`；到点或用户通过工具 **`greeting_update`** 调整间隔。可调用 **`notification_show`** 立即弹出系统通知。测试通知 IPC 见下文 `greeting:testNotification`（在 `bootstrap.ts` 注册）。 |
@@ -54,7 +54,7 @@ src/
 
 - `llm:chat` / `deepseek:chat`：发送用户输入，返回模型回复（含记忆、可选工具调用：资料夹、定时问候、立即通知、截图检索）。
 - `memory:clear`：清空本地对话记忆文件。
-- `memory:list`：只读列出 `conversation-memory.json` 中的 user/assistant 消息。
+- `memory:list`：只读列出 `conversation-memory.json` 中的 user/assistant 消息（含 `id` 与本地时间 `createdAt`）。
 - `memory:remove`：按消息 id 删除单条记忆（对话历史页可用）。
 - `persona:reset`：清除人设覆盖文件，恢复默认 `persona.ts`。
 - `greeting:getSettings` / `greeting:setSettings`：定时问候开关与间隔；保存后会重启主进程内调度。

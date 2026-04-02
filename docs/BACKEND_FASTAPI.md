@@ -53,7 +53,7 @@ LLM（用于 `/chat`、以及你后续把“人设抽取/提醒抽取”迁移�
   - `status` 取值：`scheduled` / `fired`
   - 到点触发后会把 `status` 更新为 `fired` 并写入 `fired_at`
 - `screenshots`
-  - 保存 `captured_at`、`file_path`（可为空）与 `ocr_text`
+  - 保存 `captured_at`、`file_path`（可为空）、`ocr_text`、`ocr_status`、`ocr_error`
 - `persona_override`
   - 保存用户通过对话覆盖的人设内容（只存一份，id=1）
 - `conversation_memory`
@@ -83,12 +83,18 @@ LLM（用于 `/chat`、以及你后续把“人设抽取/提醒抽取”迁移�
 
 - `GET /screenshots?from=&to=`
   - 参数用 `from/to`（FastAPI 内部做了 alias，Electron 也可直接用同名）
+- `DELETE /screenshots/{screenshot_id}`
+  - 删除单条截图记录，返回 `{deleted: boolean}`
+- `DELETE /screenshots`
+  - 删除全部截图记录，返回 `{deletedCount: number}`
 - `POST /screenshots/ocr`
   - body：
     - `imageBase64`（图片 base64，可为 data URL）
     - `capturedAt`（可选，ISO）
     - `filePath`（可选）
-  - 返回：`{id, capturedAt, filePath, ocrText}`
+  - 返回：`{id, capturedAt, filePath, ocrText, ocrStatus, ocrError}`
+- `GET /screenshots/ocr/status`
+  - 返回 OCR 引擎可用性：`{available, engine, error?}`
 
 ### Persona & Memory（后端接口级骨架）
 
@@ -147,7 +153,7 @@ Electron 端会收到该消息并用系统 `Notification` 弹窗。
 
 如果你的后端环境未安装 PaddleOCR：
 - `/screenshots/ocr` 仍可调用
-- `ocrText` 会返回空字符串
+- `ocrStatus` 会是 `engine_unavailable`，`ocrText` 为空
 
 待你确认“截图采集方法 A”的具体落地方案后，我可以继续把 Electron 端的采集链路补齐到后端 `/screenshots/ocr` 的完整闭环。
 

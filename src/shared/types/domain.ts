@@ -17,6 +17,8 @@ export type ScreenshotRecord = {
   /** 本地保存路径或占位 */
   filePath?: string;
   ocrText?: string;
+  ocrStatus?: 'ok' | 'no_text' | 'engine_unavailable' | 'ocr_error' | 'backend_unreachable' | 'unknown';
+  ocrError?: string;
 };
 
 export type CreateReminderInput = {
@@ -28,4 +30,43 @@ export type CreateReminderInput = {
 export type ScreenshotListFilter = {
   from?: string;
   to?: string;
+};
+
+export type ScreenshotCaptureStatus = {
+  running: boolean;
+  intervalMinutes?: number;
+  lastCapturedAt?: string;
+  windowStart?: string;
+  windowEnd?: string;
+  captureRegion?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+};
+
+export type ScreenshotCaptureStartOptions = {
+  intervalMinutes: number;
+  /** HH:mm，例如 09:00 */
+  windowStart?: string;
+  /** HH:mm，例如 18:00 */
+  windowEnd?: string;
+  /**
+   * 截图裁剪范围（可选）。
+   * 坐标系基于 `desktopCapturer` 的缩略图尺寸（当前实现固定请求 1600x900）。
+   * 例如要裁掉顶部标签/地址栏，可设置 y>0、height 更小。
+   */
+  captureRegion?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+};
+
+export type OcrEngineStatus = {
+  available: boolean;
+  engine: string;
+  error?: string;
 };

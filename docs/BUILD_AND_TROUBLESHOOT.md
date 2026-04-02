@@ -31,6 +31,11 @@
 
 若仍出现：看终端主进程是否报错；确认没有旧进程占用。
 
+## `No handler registered for 'screenshot:*'`
+
+- 常见于新增了截图 IPC（如 `screenshot:ocrStatus`、`screenshot:deleteAll`）后未重启主进程。
+- 处理：在 `npm run start` 终端输入 `rs`（或直接重启开发进程）。
+
 ## 渲染层白屏 / 路由 404
 
 - Hash 路由地址应为 `#/page/home` 形式。

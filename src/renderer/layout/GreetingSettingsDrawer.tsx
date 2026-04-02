@@ -1,6 +1,7 @@
-import { Alert, App, Button, Drawer, Radio, Space, Switch, Typography } from 'antd';
+import { Alert, App, Button, Drawer, Radio, Slider, Space, Switch, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import type { GreetingIntervalMode, GreetingSettingsDTO } from '../../shared/types/greeting';
+import type { DesktopPetSettingsDTO } from '../../shared/types/pet';
 
 const { Paragraph, Text } = Typography;
 
@@ -12,6 +13,9 @@ const INTERVAL_OPTIONS: { value: GreetingIntervalMode; label: string }[] = [
   { value: 'random', label: '随机（每次在 5 / 10 / 30 / 60 分钟里抽一档）' },
 ];
 
+const sliderToNumber = (value: number | [number, number]): number =>
+  Array.isArray(value) ? value[0] : value;
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -20,14 +24,19 @@ type Props = {
 export const GreetingSettingsDrawer = ({ open, onClose }: Props) => {
   const { message } = App.useApp();
   const [settings, setSettings] = useState<GreetingSettingsDTO | null>(null);
+  const [petSettings, setPetSettings] = useState<DesktopPetSettingsDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [testSending, setTestSending] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const s = await window.assistantApi.greeting.getSettings();
+      const [s, p] = await Promise.all([
+        window.assistantApi.greeting.getSettings(),
+        window.assistantApi.pet.getSettings(),
+      ]);
       setSettings(s);
+      setPetSettings(p);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '加载设置失败');
     } finally {
@@ -50,6 +59,15 @@ export const GreetingSettingsDrawer = ({ open, onClose }: Props) => {
     }
   };
 
+  const persistPet = async (patch: Partial<DesktopPetSettingsDTO>) => {
+    try {
+      const next = await window.assistantApi.pet.setSettings(patch);
+      setPetSettings(next);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '保存桌宠设置失败');
+    }
+  };
+
   const sendTest = async () => {
     setTestSending(true);
     try {
@@ -68,7 +86,7 @@ export const GreetingSettingsDrawer = ({ open, onClose }: Props) => {
 
   return (
     <Drawer
-      title="定时问候"
+      title="设置"
       placement="right"
       size={360}
       onClose={onClose}
@@ -125,6 +143,56 @@ export const GreetingSettingsDrawer = ({ open, onClose }: Props) => {
             立即发送测试通知
           </Button>
         </Space>
+
+        <div>
+          <Text strong style={{ display: 'block', marginBottom: 12 }}>
+            桌宠设置
+          </Text>
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space align="center">
+              <Text>开机显示桌宠</Text>
+              <Switch
+                checked={petSettings?.showOnStartup ?? false}
+                disabled={petSettings === null}
+                onChange={(checked) => void persistPet({ showOnStartup: checked })}
+              />
+            </Space>
+
+            <div>
+              <Text type="secondary">大小：{petSettings?.size ?? 220}px</Text>
+              <Slider
+                min={140}
+                max={420}
+                step={10}
+                value={petSettings?.size ?? 220}
+                disabled={petSettings === null}
+                onChange={(value: number | [number, number]) =>
+                  setPetSettings((prev) => (prev ? { ...prev, size: sliderToNumber(value) } : prev))
+                }
+                onChangeComplete={(value: number | [number, number]): void => {
+                  void persistPet({ size: sliderToNumber(value) });
+                }}
+              />
+            </div>
+
+            <div>
+              <Text type="secondary">透明度：{Math.round((petSettings?.opacity ?? 1) * 100)}%</Text>
+              <Slider
+                min={35}
+                max={100}
+                step={1}
+                value={Math.round((petSettings?.opacity ?? 1) * 100)}
+                disabled={petSettings === null}
+                onChange={(value: number | [number, number]) =>
+                  setPetSettings((prev) => (prev ? { ...prev, opacity: sliderToNumber(value) / 100 } : prev))
+                }
+                onChangeComplete={(value: number | [number, number]): void => {
+                  void persistPet({ opacity: sliderToNumber(value) / 100 });
+                }}
+              />
+            </div>
+          </Space>
+        </div>
       </Space>
     </Drawer>
   );

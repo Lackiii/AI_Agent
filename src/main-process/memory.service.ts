@@ -11,6 +11,33 @@ type MemoryFile = {
   messages: ChatMessage[];
 };
 
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+const toLocalDateTimeWithOffset = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = pad2(date.getMonth() + 1);
+  const day = pad2(date.getDate());
+  const hour = pad2(date.getHours());
+  const minute = pad2(date.getMinutes());
+  const second = pad2(date.getSeconds());
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMinutes);
+  const offsetHour = pad2(Math.floor(abs / 60));
+  const offsetMinute = pad2(abs % 60);
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${sign}${offsetHour}:${offsetMinute}`;
+};
+
+const normalizeToLocalDateTime = (time?: string): string => {
+  if (time) {
+    const parsed = new Date(time);
+    if (!Number.isNaN(parsed.getTime())) {
+      return toLocalDateTimeWithOffset(parsed);
+    }
+  }
+  return toLocalDateTimeWithOffset(new Date());
+};
+
 const getMemoryFilePath = (): string => {
   if (!app.isReady()) {
     throw new Error('Cannot access userData before app is ready.');
@@ -23,6 +50,13 @@ const withIds = (messages: ChatMessage[]): ChatMessage[] =>
     ...m,
     id: m.id || randomUUID(),
   }));
+
+const withTimestamps = (messages: ChatMessage[]): ChatMessage[] => {
+  return messages.map((m) => ({
+    ...m,
+    createdAt: normalizeToLocalDateTime(m.createdAt),
+  }));
+};
 
 const readFile = (): MemoryFile => {
   const filePath = getMemoryFilePath();
@@ -39,8 +73,8 @@ const readFile = (): MemoryFile => {
       (m) =>
         (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
     );
-    const needsPersist = filtered.some((m) => !m.id);
-    const normalized = withIds(filtered);
+    const needsPersist = filtered.some((m) => !m.id || !m.createdAt);
+    const normalized = withTimestamps(withIds(filtered));
     if (needsPersist && normalized.length > 0) {
       writeFile({ version: 1, messages: normalized });
     }
@@ -65,7 +99,20 @@ const trimToMax = (data: MemoryFile): void => {
 /** 供 LLM 使用的近期消息（去掉 id，避免多余字段进 API） */
 export const getRecentConversation = (limit: number): ChatMessage[] => {
   const { messages } = readFile();
-  return messages.slice(-limit).map(({ role, content }) => ({ role, content }));
+  return messages.slice(-limit).map(({ role, content }) => ({
+    role,
+    content,
+  }));
+};
+
+/** 供时间语义增强使用（保留 createdAt） */
+export const getRecentConversationWithTimestamp = (limit: number): ChatMessage[] => {
+  const { messages } = readFile();
+  return messages.slice(-limit).map(({ role, content, createdAt }) => ({
+    role,
+    content,
+    createdAt,
+  }));
 };
 
 /** 带 id，供界面展示与单条删除 */
@@ -76,9 +123,11 @@ export const getConversationHistory = (): ChatMessage[] => {
 
 export const appendExchange = (userText: string, assistantText: string): void => {
   const data = readFile();
+  const userTs = toLocalDateTimeWithOffset(new Date());
+  const assistantTs = toLocalDateTimeWithOffset(new Date());
   data.messages.push(
-    { role: 'user', content: userText, id: randomUUID() },
-    { role: 'assistant', content: assistantText, id: randomUUID() },
+    { role: 'user', content: userText, id: randomUUID(), createdAt: userTs },
+    { role: 'assistant', content: assistantText, id: randomUUID(), createdAt: assistantTs },
   );
   trimToMax(data);
   writeFile(data);
@@ -90,9 +139,11 @@ export const appendNotificationTurn = (assistantBody: string, title?: string): v
   const assistantContent = title
     ? `「${title.slice(0, 48)}」${assistantBody}`.slice(0, 2000)
     : assistantBody.slice(0, 2000);
+  const userTs = toLocalDateTimeWithOffset(new Date());
+  const assistantTs = toLocalDateTimeWithOffset(new Date());
   data.messages.push(
-    { role: 'user', content: '（桌面通知·点击可回到对话）', id: randomUUID() },
-    { role: 'assistant', content: assistantContent, id: randomUUID() },
+    { role: 'user', content: '（桌面通知·点击可回到对话）', id: randomUUID(), createdAt: userTs },
+    { role: 'assistant', content: assistantContent, id: randomUUID(), createdAt: assistantTs },
   );
   trimToMax(data);
   writeFile(data);

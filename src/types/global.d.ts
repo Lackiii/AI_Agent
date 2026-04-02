@@ -1,7 +1,16 @@
-import type { CreateReminderInput, Reminder, ScreenshotListFilter, ScreenshotRecord } from '../shared/types/domain';
+import type {
+  CreateReminderInput,
+  OcrEngineStatus,
+  Reminder,
+  ScreenshotCaptureStartOptions,
+  ScreenshotCaptureStatus,
+  ScreenshotListFilter,
+  ScreenshotRecord,
+} from '../shared/types/domain';
 import type { GreetingSettingsDTO } from '../shared/types/greeting';
 import type { ChatMessage } from '../shared/types/llm';
 import type { VaultReadResult } from '../shared/types/vault';
+import type { DesktopPetSettingsDTO } from '../shared/types/pet';
 
 export {};
 
@@ -29,6 +38,17 @@ declare global {
       };
       screenshots: {
         list: (filter?: ScreenshotListFilter) => Promise<ScreenshotRecord[]>;
+        captureNow: () => Promise<ScreenshotRecord>;
+        start: (options: ScreenshotCaptureStartOptions) => Promise<ScreenshotCaptureStatus>;
+        stop: () => Promise<ScreenshotCaptureStatus>;
+        status: () => Promise<ScreenshotCaptureStatus>;
+        ocrStatus: () => Promise<OcrEngineStatus>;
+        pickRegion: () => Promise<{ x: number; y: number; width: number; height: number } | null>;
+        clearRegion: () => Promise<ScreenshotCaptureStatus>;
+        submitPickRegion: (region: { x: number; y: number; width: number; height: number } | null) => Promise<boolean>;
+        cancelPickRegion: () => Promise<boolean>;
+        remove: (id: string) => Promise<boolean>;
+        removeAll: () => Promise<number>;
       };
       greeting: {
         getSettings: () => Promise<GreetingSettingsDTO>;
@@ -39,6 +59,12 @@ declare global {
         list: () => Promise<string[]>;
         read: (relativePath: string) => Promise<VaultReadResult>;
         delete: (relativePath: string) => Promise<boolean>;
+      };
+      pet: {
+        openChat: () => Promise<boolean>;
+        getSettings: () => Promise<DesktopPetSettingsDTO>;
+        setSettings: (patch: Partial<DesktopPetSettingsDTO>) => Promise<DesktopPetSettingsDTO>;
+        onBubble: (callback: (text: string) => void) => () => void;
       };
     };
     /** @deprecated 请使用 assistantApi.llm.chat */

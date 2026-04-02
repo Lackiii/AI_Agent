@@ -47,7 +47,9 @@ def init_schema() -> None:
               id TEXT PRIMARY KEY,
               captured_at TEXT NOT NULL,
               file_path TEXT,
-              ocr_text TEXT
+              ocr_text TEXT,
+              ocr_status TEXT,
+              ocr_error TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_screenshots_captured_at
               ON screenshots(captured_at);
@@ -69,6 +71,15 @@ def init_schema() -> None:
             CREATE INDEX IF NOT EXISTS idx_memory_created_at ON conversation_memory(created_at);
             """
         )
+        # Lightweight migration for existing DBs (SQLite has no IF NOT EXISTS for columns).
+        try:
+            conn.execute("ALTER TABLE screenshots ADD COLUMN ocr_status TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE screenshots ADD COLUMN ocr_error TEXT")
+        except Exception:
+            pass
         conn.commit()
     finally:
         conn.close()

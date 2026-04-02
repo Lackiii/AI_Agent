@@ -8,6 +8,7 @@ import {
   clearConversationMemory,
   getConversationHistory,
   getRecentConversation,
+  getRecentConversationWithTimestamp,
   removeMessageById,
 } from '../memory.service';
 import { takePendingNotifications } from '../notification-memory-queue';
@@ -20,18 +21,259 @@ import {
 } from '../persona-memory.service';
 import { extractReminderFromNaturalLanguage, mightContainReminderIntent } from '../reminder-extract.service';
 import { createReminder, deleteReminder, isDuplicateReminder, listReminders } from '../reminder.service';
-import { listScreenshots } from '../screenshot.service';
+import {
+  captureScreenshotNow,
+  getOcrEngineStatus,
+  getScreenshotCaptureStatus,
+  listScreenshots,
+  removeAllScreenshots,
+  removeScreenshot,
+  setScreenshotCaptureRegion,
+  startScreenshotCapture,
+  stopScreenshotCapture,
+} from '../screenshot.service';
+import { openRegionPickerWindow, submitRegionPick } from '../region-picker.window';
 import { buildLocalDateTimeSystemMessage } from '../datetime-context';
 import { shouldDisableTimedGreeting } from '../greeting-intent-heuristic.service';
 import { notifyGreetingSettingsChange } from '../greeting-notification.service';
 import { getGreetingSettings, setGreetingSettings } from '../greeting-settings.service';
 import { restartGreetingScheduler } from '../greeting-scheduler.service';
-import type { CreateReminderInput, ScreenshotListFilter } from '../../shared/types/domain';
+import { getDesktopPetSettings, setDesktopPetSettings } from '../pet-settings.service';
+import {
+  hideDesktopPetWindow,
+  setDesktopPetWindowSettings,
+  showDesktopPetWindow,
+} from '../pet.window';
+import type { CreateReminderInput, ScreenshotCaptureStartOptions, ScreenshotListFilter } from '../../shared/types/domain';
 import type { GreetingSettingsDTO } from '../../shared/types/greeting';
 import type { ChatMessage } from '../../shared/types/llm';
 import type { VaultReadResult } from '../../shared/types/vault';
+import type { DesktopPetSettingsDTO } from '../../shared/types/pet';
 
 const MEMORY_WINDOW = 20;
+const SCREENSHOT_CONTEXT_RECENT_LIMIT = 8;
+const SCREENSHOT_CONTEXT_MATCH_LIMIT = 5;
+const SCREENSHOT_CONTEXT_PREVIEW_MAX_LEN = 220;
+const SCREENSHOT_CONTEXT_MATCH_SNIPPET_MAX_LEN = 900;
+const SCREENSHOT_CONTEXT_RECENT_SNIPPET_MAX_LEN = 420;
+
+const SCREENSHOT_STOP_WORDS = new Set([
+  '这个',
+  '那个',
+  '怎么',
+  '为什么',
+  '是否',
+  '一下',
+  '帮我',
+  '我们',
+  '可以',
+  '需要',
+  '现在',
+  '最近',
+  '根据',
+  '关于',
+  '截图',
+  '轨迹',
+  '记录',
+  '主动',
+  '对话',
+  '回答',
+  'please',
+  'help',
+  'what',
+  'why',
+  'how',
+  'with',
+  'from',
+  'that',
+  'this',
+  'have',
+  'show',
+  'screen',
+  'screenshot',
+]);
+
+const toTextPreview = (text: string | undefined, maxLen = SCREENSHOT_CONTEXT_PREVIEW_MAX_LEN): string => {
+  if (!text) return '（无 OCR 文本）';
+  const compact = text.replace(/\s+/g, ' ').trim();
+  if (!compact) return '（无 OCR 文本）';
+  return compact.length > maxLen ? `${compact.slice(0, maxLen)}...` : compact;
+};
+
+const toTextSnippet = (text: string | undefined, maxLen: number): string => {
+  if (!text) return '';
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  return t.length > maxLen ? `${t.slice(0, maxLen)}...` : t;
+};
+
+const formatLocalDateTime = (isoLike: string): string => {
+  if (!isoLike) return '';
+  const d = new Date(isoLike);
+  if (Number.isNaN(d.getTime())) return isoLike;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(
+    d.getSeconds(),
+  )}`;
+};
+
+const formatDurationForHuman = (fromMs: number, toMs: number): string => {
+  const delta = Math.max(0, toMs - fromMs);
+  const totalMinutes = Math.floor(delta / 60000);
+  if (totalMinutes < 1) return '不到1分钟';
+  if (totalMinutes < 60) return `${totalMinutes}分钟`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 24) {
+    return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`;
+  }
+  const days = Math.floor(hours / 24);
+  const restHours = hours % 24;
+  if (restHours > 0) return `${days}天${restHours}小时`;
+  return `${days}天`;
+};
+
+const toPreviewText = (text: string | null | undefined, maxLen = 42): string => {
+  const compact = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!compact) return '（空）';
+  return compact.length > maxLen ? `${compact.slice(0, maxLen)}...` : compact;
+};
+
+const buildConversationTimingContext = (history: ChatMessage[]): string => {
+  const now = Date.now();
+  const userTurns = history.filter((m) => m.role === 'user' && typeof m.content === 'string' && m.content.trim());
+  const lastRecord = history[history.length - 1];
+  const lastUser = userTurns[userTurns.length - 1];
+  const prevUser = userTurns.length >= 2 ? userTurns[userTurns.length - 2] : undefined;
+
+  const lines: string[] = [
+    '对话时间上下文（本地时间，供语气与时距判断使用）：',
+    `- 当前时间：${formatLocalDateTime(new Date().toISOString())}`,
+  ];
+
+  const lastRecordMs = lastRecord?.createdAt ? Date.parse(lastRecord.createdAt) : NaN;
+  if (!Number.isNaN(lastRecordMs)) {
+    lines.push(
+      `- 上一条历史消息时间：${formatLocalDateTime(lastRecord!.createdAt as string)}（距今 ${formatDurationForHuman(lastRecordMs, now)}）`,
+    );
+  } else {
+    lines.push('- 上一条历史消息时间：无可用记录');
+  }
+
+  const lastUserMs = lastUser?.createdAt ? Date.parse(lastUser.createdAt) : NaN;
+  if (!Number.isNaN(lastUserMs)) {
+    lines.push(
+      `- 上一次用户发言：${formatLocalDateTime(lastUser!.createdAt as string)}（距今 ${formatDurationForHuman(lastUserMs, now)}）`,
+    );
+    lines.push(`- 上一次用户发言内容摘要：${toPreviewText(lastUser?.content)}`);
+  } else {
+    lines.push('- 上一次用户发言：无可用记录');
+  }
+
+  const prevUserMs = prevUser?.createdAt ? Date.parse(prevUser.createdAt) : NaN;
+  if (!Number.isNaN(lastUserMs) && !Number.isNaN(prevUserMs)) {
+    lines.push(
+      `- 最近两次用户发言间隔：${formatDurationForHuman(prevUserMs, lastUserMs)}（${formatLocalDateTime(
+        prevUser!.createdAt as string,
+      )} -> ${formatLocalDateTime(lastUser!.createdAt as string)}）`,
+    );
+  }
+
+  lines.push(
+    '当用户询问“上一次对话是什么时候/多久没聊了”等时间类问题时，必须基于以上信息作答；不要编造。',
+    '当用户表达负面情绪且与上次发言间隔较久（如>=1小时），可自然提一句间隔时间并做关心跟进；语气自然，不要机械。',
+    '不要在每次回复里主动附加固定时间戳，只有用户询问或语境需要时才提及时间。',
+  );
+  return lines.join('\n');
+};
+
+const extractPromptKeywords = (prompt: string): string[] => {
+  const raw = prompt
+    .toLowerCase()
+    .match(/[a-z0-9_]{2,}|[\u4e00-\u9fa5]{2,}/g);
+  if (!raw) return [];
+  const dedup = new Set<string>();
+  for (const w of raw) {
+    if (SCREENSHOT_STOP_WORDS.has(w)) continue;
+    dedup.add(w);
+  }
+  return [...dedup].slice(0, 8);
+};
+
+const buildScreenshotContextMessage = async (prompt: string): Promise<string> => {
+  let rows = await listScreenshots();
+  if (!rows.length) {
+    return '截图轨迹上下文：暂无记录。';
+  }
+  rows = rows.slice().sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+  const recent = rows.slice(0, SCREENSHOT_CONTEXT_RECENT_LIMIT);
+  const keywords = extractPromptKeywords(prompt);
+  const matched =
+    keywords.length === 0
+      ? []
+      : rows
+          .filter((r) => {
+            const text = `${r.ocrText || ''} ${r.ocrError || ''}`.toLowerCase();
+            return keywords.some((k) => text.includes(k));
+          })
+          .slice(0, SCREENSHOT_CONTEXT_MATCH_LIMIT);
+  const statusCounter = rows.reduce(
+    (acc, r) => {
+      const s = r.ocrStatus || 'unknown';
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  const recentLines = recent.map(
+    (r, i) =>
+      `${i + 1}. ${formatLocalDateTime(r.capturedAt)} | status=${r.ocrStatus || 'unknown'} | ${toTextPreview(r.ocrText)}${
+        r.ocrError ? ` | err=${toTextPreview(r.ocrError, 60)}` : ''
+      }`,
+  );
+  const matchedLines = matched.map(
+    (r, i) =>
+      `${i + 1}. ${formatLocalDateTime(r.capturedAt)} | status=${r.ocrStatus || 'unknown'} | ${toTextPreview(r.ocrText)}${
+        r.ocrError ? ` | err=${toTextPreview(r.ocrError, 60)}` : ''
+      }`,
+  );
+
+  // Provide longer OCR snippets for better grounding (still capped to avoid blowing up context).
+  const matchedSnippets = matched
+    .map((r, i) => {
+      const snip = toTextSnippet(r.ocrText, SCREENSHOT_CONTEXT_MATCH_SNIPPET_MAX_LEN);
+      if (!snip) return null;
+      return `${i + 1}. ${formatLocalDateTime(r.capturedAt)}\n${snip}`;
+    })
+    .filter(Boolean) as string[];
+
+  const recentSnippets = recent
+    .slice(0, 2)
+    .map((r, i) => {
+      const snip = toTextSnippet(r.ocrText, SCREENSHOT_CONTEXT_RECENT_SNIPPET_MAX_LEN);
+      if (!snip) return null;
+      return `${i + 1}. ${formatLocalDateTime(r.capturedAt)}\n${snip}`;
+    })
+    .filter(Boolean) as string[];
+  const statusText = Object.entries(statusCounter)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(', ');
+  return [
+    '截图轨迹上下文（仅作辅助，不可编造）：',
+    `- 记录总数：${rows.length}`,
+    `- OCR 状态分布：${statusText || 'unknown:0'}`,
+    `- 用户问题关键词：${keywords.length ? keywords.join(', ') : '无'}`,
+    '- 最近截图（按时间倒序）：',
+    ...recentLines,
+    ...(matchedLines.length
+      ? ['- 与当前问题相关的截图命中：', ...matchedLines]
+      : ['- 与当前问题相关的截图命中：无']),
+    ...(matchedSnippets.length ? ['- 命中截图的 OCR 原文片段（截断版）：', ...matchedSnippets] : []),
+    ...(matchedSnippets.length === 0 && recentSnippets.length ? ['- 最近截图的 OCR 原文片段（截断版）：', ...recentSnippets] : []),
+    '当用户问“我刚刚在做什么/报错是什么/哪一步失败”时，优先基于以上截图轨迹回答；若证据不足请明确说明不确定。',
+    '若最近截图反复出现 error/exception/fail/traceback 等信息，可在回复中主动给出简短排查建议（1-3 条）。',
+  ].join('\n');
+};
 
 const hourToChineseClock = (hour24: number): string => {
   const h12 = hour24 % 12;
@@ -135,16 +377,24 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   }
 
   const history = getRecentConversation(MEMORY_WINDOW);
+  const historyWithTime = getRecentConversationWithTimestamp(MEMORY_WINDOW);
   const messages: ChatMessage[] = [{ role: 'system', content: getEffectivePersona() }];
 
   messages.push({ role: 'system', content: buildLocalDateTimeSystemMessage() });
+  messages.push({ role: 'system', content: buildConversationTimingContext(historyWithTime) });
+  try {
+    messages.push({ role: 'system', content: await buildScreenshotContextMessage(trimmed) });
+  } catch {
+    // 截图上下文获取失败不阻断主对话
+  }
 
   messages.push({
     role: 'system',
     content: `你拥有工具：
 1) vault_list / vault_read / vault_write / vault_delete：只能访问本机用户资料目录下的 AI 资料夹（其它路径一律不可用）。资料夹绝对路径：${getVaultRootPath()}。用户让你保存随笔/笔记/草稿时，必须用 vault_write 写入完整正文；未调用工具则视为未保存。用户明确要求删除资料夹内某个已存文件时，用 vault_delete。
 2) notification_show：立刻弹出一条系统通知（Toast），且正文会写入对话记忆（用户可在「对话历史」看到），便于你记得自己刚通过弹窗说过什么。用户要求「马上/立即弹窗或通知测试」等必须调用；参数 body 为通知正文。
-3) greeting_update：控制「定时主动问候」（到点发系统通知、一两句关心话，用户未发消息也会触发）。用户希望每隔一段时间被提醒休息、喝水、陪聊、写代码间歇等，须调用本工具开启并设定间隔（如半小时用 interval_mode=30m，或 interval_minutes=30）；用户说下班、明天见、再见、不用提醒、关掉问候等，须设 enabled=false。若用户只是描述需求，你应在回复中确认已生效（并实际调用工具）。`,
+3) greeting_update：控制「定时主动问候」（到点发系统通知、一两句关心话，用户未发消息也会触发）。用户希望每隔一段时间被提醒休息、喝水、陪聊、写代码间歇等，须调用本工具开启并设定间隔（如半小时用 interval_mode=30m，或 interval_minutes=30）；用户说下班、明天见、再见、不用提醒、关掉问候等，须设 enabled=false。若用户只是描述需求，你应在回复中确认已生效（并实际调用工具）。
+4) screenshot_search：检索截图轨迹（OCR 摘要/报错/时间），用于回答“我刚刚在做什么”“刚才什么报错”“从什么时候开始失败”等问题。遇到这类请求，应优先调用该工具再回答；证据不足时要明确说明。工具返回里含 timeline（时间线摘要）与 statusSummary（状态汇总），请优先引用它们组织回答。`,
   });
 
   if (reminderOutcome === 'created') {
@@ -155,7 +405,7 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
     });
   }
 
-  messages.push(...history, { role: 'user', content: trimmed });
+  messages.push(...history.map(({ role, content }) => ({ role, content })), { role: 'user', content: trimmed });
 
   // 仅在“重复/过时”场景短路，避免把固定文案夹杂进主回复里。
   if (reminderShouldShortReply) {
@@ -189,9 +439,22 @@ export const registerIpcHandlers = (): void => {
   ipcMain.removeHandler('reminder:create');
   ipcMain.removeHandler('reminder:delete');
   ipcMain.removeHandler('screenshot:list');
+  ipcMain.removeHandler('screenshot:captureNow');
+  ipcMain.removeHandler('screenshot:start');
+  ipcMain.removeHandler('screenshot:stop');
+  ipcMain.removeHandler('screenshot:status');
+  ipcMain.removeHandler('screenshot:ocrStatus');
+  ipcMain.removeHandler('screenshot:delete');
+  ipcMain.removeHandler('screenshot:deleteAll');
+  ipcMain.removeHandler('screenshot:pickRegion');
+  ipcMain.removeHandler('screenshot:pickRegion:submit');
+  ipcMain.removeHandler('screenshot:pickRegion:cancel');
+  ipcMain.removeHandler('screenshot:region:clear');
   ipcMain.removeHandler('deepseek:chat');
   ipcMain.removeHandler('greeting:getSettings');
   ipcMain.removeHandler('greeting:setSettings');
+  ipcMain.removeHandler('pet:getSettings');
+  ipcMain.removeHandler('pet:setSettings');
   ipcMain.removeHandler('vault:list');
   ipcMain.removeHandler('vault:read');
 
@@ -226,6 +489,61 @@ export const registerIpcHandlers = (): void => {
     return listScreenshots(filter);
   });
 
+  ipcMain.handle('screenshot:captureNow', async () => {
+    return captureScreenshotNow();
+  });
+
+  ipcMain.handle('screenshot:start', async (_event, options?: ScreenshotCaptureStartOptions) => {
+    return startScreenshotCapture({
+      intervalMinutes: Number(options?.intervalMinutes ?? 5),
+      windowStart: options?.windowStart,
+      windowEnd: options?.windowEnd,
+    });
+  });
+
+  ipcMain.handle('screenshot:stop', async () => {
+    return stopScreenshotCapture();
+  });
+
+  ipcMain.handle('screenshot:status', async () => {
+    return getScreenshotCaptureStatus();
+  });
+
+  ipcMain.handle('screenshot:ocrStatus', async () => {
+    return getOcrEngineStatus();
+  });
+
+  ipcMain.handle('screenshot:delete', async (_event, id: string) => {
+    return removeScreenshot(id);
+  });
+
+  ipcMain.handle('screenshot:deleteAll', async () => {
+    return removeAllScreenshots();
+  });
+
+  ipcMain.handle('screenshot:pickRegion', async () => {
+    const picked = await openRegionPickerWindow();
+    if (picked) {
+      setScreenshotCaptureRegion(picked);
+    }
+    return picked;
+  });
+
+  ipcMain.handle('screenshot:pickRegion:submit', async (_event, region) => {
+    const r = region as { x: number; y: number; width: number; height: number } | null;
+    submitRegionPick(r);
+    return true;
+  });
+
+  ipcMain.handle('screenshot:pickRegion:cancel', async () => {
+    submitRegionPick(null);
+    return true;
+  });
+
+  ipcMain.handle('screenshot:region:clear', async () => {
+    return setScreenshotCaptureRegion(undefined);
+  });
+
   ipcMain.handle('greeting:getSettings', async () => getGreetingSettings());
 
   ipcMain.handle('greeting:setSettings', async (_event, patch: Partial<GreetingSettingsDTO>) => {
@@ -233,6 +551,19 @@ export const registerIpcHandlers = (): void => {
     const next = setGreetingSettings(patch);
     notifyGreetingSettingsChange(prev, next);
     restartGreetingScheduler();
+    return next;
+  });
+
+  ipcMain.handle('pet:getSettings', async () => getDesktopPetSettings());
+
+  ipcMain.handle('pet:setSettings', async (_event, patch: Partial<DesktopPetSettingsDTO>) => {
+    const next = setDesktopPetSettings(patch);
+    setDesktopPetWindowSettings(next);
+    if (next.showOnStartup) {
+      showDesktopPetWindow();
+    } else {
+      hideDesktopPetWindow();
+    }
     return next;
   });
 

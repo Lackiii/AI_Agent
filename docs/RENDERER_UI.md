@@ -34,12 +34,14 @@ Ant Design 文档索引见仓库内 [llms.txt](./llms.txt)。
 | 路径 | 文件 | 说明 |
 | --- | --- | --- |
 | `/page/home` | `features/home/HomePage.tsx` | 首页欢迎与入口按钮 |
+| `/page/pet` | `features/pet/DesktopPetPage.tsx` | 桌宠渲染页（仅桌宠透明窗口使用，不在主导航展示）；支持气泡显示与打开对话按钮 |
 | `/page/chat` | `features/chat/ChatPage.tsx` | 对话输入、`assistantApi.llm.chat`；**「记忆与资料」下拉**：查看 `ai-vault` 列表（Modal）、预览、**删除**单文件（`vault:delete`）、**清空对话记忆**；删除按钮在列表行上 **悬停显示**（样式见同目录 **`ChatPage.css`**，Popconfirm 打开时用类名保持可见）。回复区 `components/MarkdownContent.tsx` |
 | `/page/chat-history` | `features/chat/ChatHistoryPage.tsx` | 只读/管理本地对话记忆列表，可按条删除（`memory:remove`） |
 | `/page/reminders` | `features/reminders/RemindersPage.tsx` | 提醒列表与表单 |
-| `/page/screenshots` | `features/screenshots/ScreenshotsPage.tsx` | 截图轨迹（对接后端数据为主） |
+| `/page/screenshots` | `features/screenshots/ScreenshotsPage.tsx` | 截图轨迹：立即截图、定时采集（间隔+窗口）、**框选 OCR 范围**（裁剪后再识别，去掉标签栏/地址栏噪声）、OCR 状态展示、关键词检索、单条删除与一键删除（样式与历史页一致） |
+| `/page/region-picker` | `features/screenshots/RegionPickerPage.tsx` | 全屏透明选框层（只给主进程选框窗口使用，正常导航不会进入） |
 
-侧栏 **`layout/AppShell.tsx`**：主导航菜单；**定时问候设置** 抽屉（改 `greeting:*`）；应用名「拉文杜拉」等文案亦在此。
+侧栏 **`layout/AppShell.tsx`**：主导航菜单；**设置** 抽屉（含 `greeting:*` 与 `pet:*`）；应用名「拉文杜拉」等文案亦在此。
 
 改**文案、按钮、表单字段**：直接改对应 `*Page.tsx`。
 

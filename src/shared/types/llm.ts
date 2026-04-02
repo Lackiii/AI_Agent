@@ -18,6 +18,8 @@ export type ChatMessage = {
   tool_call_id?: string;
   /** 本地对话记忆文件中的稳定 id，用于单条删除；不进大模型 API */
   id?: string;
+  /** 消息创建时间（ISO 8601） */
+  createdAt?: string;
 };
 
 export type ChatCompletionResponse = {

@@ -9,11 +9,16 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from app.core.config import BACKEND_PORT, BACKEND_HOST, BACKEND_WS_PATH
 from app.db.database import init_schema
 from app.db.reminders_repo import create_reminder, delete_reminder, list_reminders, ensure_repo_ready
-from app.db.screenshots_repo import create_screenshot_record, list_screenshots
+from app.db.screenshots_repo import (
+    create_screenshot_record,
+    delete_all_screenshot_records,
+    delete_screenshot_record,
+    list_screenshots,
+)
 from app.db.persona_repo import get_effective_persona, reset_persona_override, save_persona_override
 from app.db.memory_repo import append_exchange, clear_conversation_memory, get_recent_exchanges
 from app.services.scheduler import create_scheduler, schedule_pending_on_startup, schedule_reminder
-from app.services.ocr_service import run_paddle_ocr
+from app.services.ocr_service import get_ocr_engine_status, run_paddle_ocr
 from app.llm_client import chat_completion
 from app.ws.manager import WebSocketManager
 
@@ -34,6 +39,14 @@ class CreateReminderRequest(BaseModel):
 
 class DeleteReminderResponse(BaseModel):
     deleted: bool
+
+
+class DeleteScreenshotResponse(BaseModel):
+    deleted: bool
+
+
+class DeleteAllScreenshotsResponse(BaseModel):
+    deletedCount: int
 
 
 class OcrScreenshotRequest(BaseModel):
@@ -118,16 +131,34 @@ async def get_screenshots(
     return list_screenshots(from_iso=from_, to_iso=to_)
 
 
+@app.delete("/screenshots/{screenshot_id}", response_model=DeleteScreenshotResponse)
+async def del_screenshot(screenshot_id: str) -> DeleteScreenshotResponse:
+    deleted = delete_screenshot_record(screenshot_id)
+    return DeleteScreenshotResponse(deleted=deleted)
+
+
+@app.delete("/screenshots", response_model=DeleteAllScreenshotsResponse)
+async def del_all_screenshots() -> DeleteAllScreenshotsResponse:
+    deleted_count = delete_all_screenshot_records()
+    return DeleteAllScreenshotsResponse(deletedCount=deleted_count)
+
+
 @app.post("/screenshots/ocr")
 async def ocr_screenshot(req: OcrScreenshotRequest) -> dict:
-    # Best-effort OCR. If PaddleOCR isn't installed, this returns "".
-    ocr_text = await asyncio.to_thread(run_paddle_ocr, req.imageBase64)
+    ocr_result = await asyncio.to_thread(run_paddle_ocr, req.imageBase64)
     record = create_screenshot_record(
         captured_at_iso=req.capturedAt,
         file_path=req.filePath,
-        ocr_text=ocr_text,
+        ocr_text=ocr_result.get("text", ""),
+        ocr_status=ocr_result.get("status", "unknown"),
+        ocr_error=ocr_result.get("error"),
     )
     return record
+
+
+@app.get("/screenshots/ocr/status")
+async def ocr_status() -> dict:
+    return get_ocr_engine_status()
 
 
 @app.websocket(BACKEND_WS_PATH)

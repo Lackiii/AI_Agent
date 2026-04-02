@@ -10,7 +10,7 @@ import {
 } from './china-long-holidays';
 
 const TITLE = '拉文杜拉';
-const USER_NICK = '阿卿';
+const USER_NICK = '主人';
 const STATE_FILE = 'startup-greeting-state.json';
 
 type StartupGreetingState = {
@@ -172,10 +172,10 @@ const buildPromptMessages = (opts: {
       crossedWeekendSinceLastGreeting: crossedWeekend,
       longPublicHolidayStrictlyBetweenLastAndToday: longHolidayBetween,
       styleHints: {
-        weekend: '例如：阿卿，周末好～',
+        weekend: '例如：主人，周末好～',
         new_day: '例如：早上好/下午好，今天也是新的一天啦',
-        after_weekend: '例如：早上好阿卿，周末过得怎么样？',
-        long_absence: '例如：阿卿……好久不见，我好想你',
+        after_weekend: '例如：早上好主人，周末过得怎么样？',
+        long_absence: '例如：主人……好久不见，我好想你',
         first_visit: '首次见面，热情但不冗长',
       },
     },

@@ -138,7 +138,9 @@ const capturePrimaryScreenAsDataUrl = async (): Promise<string> => {
     throw new Error('No screen source found');
   }
   const source = sources[0];
-  let img = source.thumbnail;
+  // Important: `desktopCapturer` thumbnails keep aspect ratio and may not be exactly 1600x900.
+  // Our region picker maps coordinates in a fixed 1600x900 space, so we normalize to that size first.
+  let img = source.thumbnail.resize({ width: 1600, height: 900, quality: 'good' });
 
   // Crop before OCR to avoid browser chrome/noise.
   if (captureRegion) {

@@ -11,6 +11,7 @@ import type {
 import type { GreetingSettingsDTO } from './shared/types/greeting';
 import type { ChatMessage } from './shared/types/llm';
 import type { VaultReadResult } from './shared/types/vault';
+import type { DesktopPetSettingsDTO } from './shared/types/pet';
 
 contextBridge.exposeInMainWorld('assistantApi', {
   llm: {
@@ -73,6 +74,19 @@ contextBridge.exposeInMainWorld('assistantApi', {
     read: (relativePath: string) =>
       ipcRenderer.invoke('vault:read', relativePath) as Promise<VaultReadResult>,
     delete: (relativePath: string) => ipcRenderer.invoke('vault:delete', relativePath) as Promise<boolean>,
+  },
+  pet: {
+    openChat: () => ipcRenderer.invoke('pet:openChat') as Promise<boolean>,
+    getSettings: () => ipcRenderer.invoke('pet:getSettings') as Promise<DesktopPetSettingsDTO>,
+    setSettings: (patch: Partial<DesktopPetSettingsDTO>) =>
+      ipcRenderer.invoke('pet:setSettings', patch) as Promise<DesktopPetSettingsDTO>,
+    onBubble: (callback: (text: string) => void) => {
+      const listener = (_e: unknown, text: string) => callback(text);
+      ipcRenderer.on('pet:bubble', listener);
+      return () => {
+        ipcRenderer.removeListener('pet:bubble', listener);
+      };
+    },
   },
 });
 

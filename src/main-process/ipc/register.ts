@@ -38,10 +38,17 @@ import { shouldDisableTimedGreeting } from '../greeting-intent-heuristic.service
 import { notifyGreetingSettingsChange } from '../greeting-notification.service';
 import { getGreetingSettings, setGreetingSettings } from '../greeting-settings.service';
 import { restartGreetingScheduler } from '../greeting-scheduler.service';
+import { getDesktopPetSettings, setDesktopPetSettings } from '../pet-settings.service';
+import {
+  hideDesktopPetWindow,
+  setDesktopPetWindowSettings,
+  showDesktopPetWindow,
+} from '../pet.window';
 import type { CreateReminderInput, ScreenshotCaptureStartOptions, ScreenshotListFilter } from '../../shared/types/domain';
 import type { GreetingSettingsDTO } from '../../shared/types/greeting';
 import type { ChatMessage } from '../../shared/types/llm';
 import type { VaultReadResult } from '../../shared/types/vault';
+import type { DesktopPetSettingsDTO } from '../../shared/types/pet';
 
 const MEMORY_WINDOW = 20;
 const SCREENSHOT_CONTEXT_RECENT_LIMIT = 8;
@@ -446,6 +453,8 @@ export const registerIpcHandlers = (): void => {
   ipcMain.removeHandler('deepseek:chat');
   ipcMain.removeHandler('greeting:getSettings');
   ipcMain.removeHandler('greeting:setSettings');
+  ipcMain.removeHandler('pet:getSettings');
+  ipcMain.removeHandler('pet:setSettings');
   ipcMain.removeHandler('vault:list');
   ipcMain.removeHandler('vault:read');
 
@@ -542,6 +551,19 @@ export const registerIpcHandlers = (): void => {
     const next = setGreetingSettings(patch);
     notifyGreetingSettingsChange(prev, next);
     restartGreetingScheduler();
+    return next;
+  });
+
+  ipcMain.handle('pet:getSettings', async () => getDesktopPetSettings());
+
+  ipcMain.handle('pet:setSettings', async (_event, patch: Partial<DesktopPetSettingsDTO>) => {
+    const next = setDesktopPetSettings(patch);
+    setDesktopPetWindowSettings(next);
+    if (next.showOnStartup) {
+      showDesktopPetWindow();
+    } else {
+      hideDesktopPetWindow();
+    }
     return next;
   });
 

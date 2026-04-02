@@ -1,4 +1,5 @@
 import { BrowserWindow, Notification } from 'electron';
+import { pushDesktopPetBubble } from './pet.window';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -10,6 +11,7 @@ export const setDesktopNotificationWindow = (win: BrowserWindow | null): void =>
 export const showDesktopNotification = (title: string, body: string): void => {
   const safeTitle = title.slice(0, 64);
   const safeBody = body.replace(/\s+/g, ' ').slice(0, 280);
+  pushDesktopPetBubble(`${safeTitle}：${safeBody}`);
 
   if (!Notification.isSupported()) {
     return;

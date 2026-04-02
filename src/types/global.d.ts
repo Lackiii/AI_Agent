@@ -10,6 +10,7 @@ import type {
 import type { GreetingSettingsDTO } from '../shared/types/greeting';
 import type { ChatMessage } from '../shared/types/llm';
 import type { VaultReadResult } from '../shared/types/vault';
+import type { DesktopPetSettingsDTO } from '../shared/types/pet';
 
 export {};
 
@@ -58,6 +59,12 @@ declare global {
         list: () => Promise<string[]>;
         read: (relativePath: string) => Promise<VaultReadResult>;
         delete: (relativePath: string) => Promise<boolean>;
+      };
+      pet: {
+        openChat: () => Promise<boolean>;
+        getSettings: () => Promise<DesktopPetSettingsDTO>;
+        setSettings: (patch: Partial<DesktopPetSettingsDTO>) => Promise<DesktopPetSettingsDTO>;
+        onBubble: (callback: (text: string) => void) => () => void;
       };
     };
     /** @deprecated 请使用 assistantApi.llm.chat */

@@ -36,6 +36,9 @@ Electron 安全模型下：**渲染进程默认不信任**，敏感能力放在*
 | `assistantApi.screenshots.removeAll()` | `screenshot:deleteAll` | 删除全部截图记录 |
 | `assistantApi.greeting.getSettings / setSettings` | `greeting:getSettings` / `greeting:setSettings` | 定时问候开关与间隔；保存后会重启主进程调度 |
 | `assistantApi.greeting.sendTestNotification()` | `greeting:testNotification` | 发一条测试系统通知（handler 在 `bootstrap.ts`） |
+| `assistantApi.pet.openChat()` | `pet:openChat` | 从桌宠页/托盘唤起主窗口并切到对话页 |
+| `assistantApi.pet.getSettings / setSettings` | `pet:getSettings` / `pet:setSettings` | 读写桌宠设置（开机显示、大小、透明度）；保存后实时生效 |
+| `assistantApi.pet.onBubble(cb)` | （`ipcRenderer.on('pet:bubble')`） | 订阅主进程推送的桌宠气泡文本（通常来自通知联动） |
 | `assistantApi.vault.list()` | `vault:list` | 列出 `ai-vault` 下文件相对路径 |
 | `assistantApi.vault.read(path)` | `vault:read` | 读资料夹内 UTF-8 文本 |
 | `assistantApi.vault.delete(path)` | `vault:delete` | 删除资料夹内指定文件 |

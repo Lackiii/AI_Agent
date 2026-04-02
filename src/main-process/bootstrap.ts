@@ -1,12 +1,15 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import started from 'electron-squirrel-startup';
 import { loadProjectEnvironment } from './env';
 import { registerIpcHandlers } from './ipc/register';
-import { createMainWindow } from './window';
+import { createMainWindow, openMainWindowToChat } from './window';
 import { connectBackendReminderNotifications } from './backend-ws';
 import { sendTestNotification } from './greeting-notification.service';
 import { restartGreetingScheduler } from './greeting-scheduler.service';
 import { runStartupGreetingIfNeeded } from './startup-greeting.service';
+import { createDesktopPetWindow, setDesktopPetWindowSettings } from './pet.window';
+import { initAppTray } from './tray.service';
+import { getDesktopPetSettings } from './pet-settings.service';
 
 // Windows Toast 依赖固定 App User Model ID；未设置时用户即使「允许通知」也可能收不到弹窗
 if (process.platform === 'win32') {
@@ -26,15 +29,39 @@ const bootstrapCore = (): void => {
   // 单独注册：避免仅主进程未重启时与其它 IPC 不同步；且便于确认该通道一定存在
   ipcMain.removeHandler('greeting:testNotification');
   ipcMain.handle('greeting:testNotification', async () => sendTestNotification());
+  ipcMain.removeHandler('pet:openChat');
+  ipcMain.handle('pet:openChat', async () => {
+    openMainWindowToChat();
+    return true;
+  });
 };
 
 if (started) {
   bootstrapCore();
   app.quit();
 } else {
+  const hasSingleInstanceLock = app.requestSingleInstanceLock();
+  if (!hasSingleInstanceLock) {
+    app.quit();
+  } else {
+    app.on('second-instance', () => {
+      openMainWindowToChat();
+      const petSettings = getDesktopPetSettings();
+      setDesktopPetWindowSettings(petSettings);
+      if (petSettings.showOnStartup) {
+        createDesktopPetWindow();
+      }
+    });
+
   app.whenReady().then(() => {
     bootstrapCore();
+    const petSettings = getDesktopPetSettings();
+    setDesktopPetWindowSettings(petSettings);
     createMainWindow();
+    if (petSettings.showOnStartup) {
+      createDesktopPetWindow();
+    }
+    initAppTray();
     connectBackendReminderNotifications();
     restartGreetingScheduler();
     void runStartupGreetingIfNeeded().catch((e) => {
@@ -42,6 +69,7 @@ if (started) {
       console.error('[startup-greeting]', e);
     });
   });
+  }
 }
 
 app.on('window-all-closed', () => {
@@ -51,7 +79,5 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createMainWindow();
-  }
+  createMainWindow();
 });

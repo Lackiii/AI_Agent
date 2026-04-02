@@ -7,7 +7,7 @@
 | 文件 | 作用 | 常见修改 |
 | --- | --- | --- |
 | `src/main.ts` | 唯一入口，只 `import './main-process/bootstrap'` | 一般**不用动** |
-| `src/main-process/bootstrap.ts` | `loadProjectEnvironment` → `registerIpcHandlers` → `whenReady` 里 `createMainWindow` | 调整启动顺序、加 `app` 级事件 |
+| `src/main-process/bootstrap.ts` | `loadProjectEnvironment` → `registerIpcHandlers` → `whenReady` 里创建主窗口/桌宠/托盘 | 调整启动顺序、加 `app` 级事件、单实例行为 |
 | `src/main-process/window.ts` | 创建 `BrowserWindow`、加载 Vite URL 或打包后的 `index.html` | 改窗口大小、标题、是否默认打开 DevTools |
 | `src/main-process/env.ts` | 从多处路径加载 `.env` | 增加环境变量名、改 `.env` 查找路径 |
 
@@ -25,6 +25,9 @@
 | `src/main-process/reminder-extract.service.ts` | 从对话抽提醒并自动创建 | 改关键词、抽取提示词 |
 | `src/main-process/screenshot.service.ts` | 截图采集/列表/删除/OCR状态与截图工具执行 | 改采集策略（窗口/间隔/裁剪范围）、OCR 状态汇总、检索返回字段 |
 | `src/main-process/region-picker.window.ts` | 全屏透明选框窗口（框选截图裁剪范围） | 选框结果会写入截图采集状态，用于裁剪后再 OCR |
+| `src/main-process/pet.window.ts` | 桌宠窗口（透明、置顶、可拖拽、右键菜单、气泡推送） | 改默认位置、拖拽热区、右键菜单项 |
+| `src/main-process/pet-settings.service.ts` | 桌宠设置 `desktop-pet-settings.json` 读写 | 改默认值、范围约束（大小/透明度） |
+| `src/main-process/tray.service.ts` | 系统托盘（打开对话、显示/隐藏桌宠、退出） | 改托盘菜单、双击行为 |
 | `src/main-process/greeting-settings.service.ts` | `greeting-settings.json` 读写 | 改默认间隔枚举 |
 | `src/main-process/greeting-scheduler.service.ts` | 定时触发问候、与 LLM/通知联动 | 改调度策略 |
 | `src/main-process/greeting-notification.service.ts` | 系统 `Notification`、立即通知工具 | 改通知文案模板 |
@@ -35,10 +38,11 @@
 
 ## IPC 汇总与对话流水线
 
-**统一注册处：** `src/main-process/ipc/register.ts`（另见 **`bootstrap.ts`** 中 `greeting:testNotification`）。
+**统一注册处：** `src/main-process/ipc/register.ts`（另见 **`bootstrap.ts`** 中 `greeting:testNotification` / `pet:openChat`）。
 
 - 绝大多数 `ipcMain.handle('xxx', …)` 在 `register.ts`。
 - **`handleLlmChat` 顺序很重要**：先 `tryResetPersonaFromUserPhrase` → 再人设抽取保存 → 再提醒抽取 → 再拼 system（含本地时间 + 对话时间间隔上下文 + 截图轨迹上下文）→ 主对话 → 拼接 footer。
+- 桌宠设置 IPC：`pet:getSettings` / `pet:setSettings`，保存后会实时同步到桌宠窗口（大小/透明度/显示状态）。
 
 要**改对话行为**（例如少调一次 LLM、改 footer 文案）：主要改这个文件 + 上面对应 `*-extract.service.ts`。
 

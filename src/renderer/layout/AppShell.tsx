@@ -96,7 +96,7 @@ export const AppShell = () => {
               onClick={() => setGreetingDrawerOpen(true)}
               style={{ textAlign: 'left', height: 'auto', padding: '8px 12px', whiteSpace: 'normal' }}
             >
-              定时问候设置
+              设置
             </Button>
           </div>
         </div>

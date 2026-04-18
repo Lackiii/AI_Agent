@@ -63,16 +63,26 @@ const tryParseEnvText = (text: string): Record<string, string> => {
 };
 
 export const loadProjectEnvironment = (): void => {
-  const envPaths = [
+  const envPathCandidates = new Set<string>([
     path.resolve(process.cwd(), '.env'),
     path.resolve('.', '.env'),
     path.resolve(__dirname, '../../.env'),
-  ];
+    path.resolve(path.dirname(process.execPath), '.env'),
+  ]);
   try {
-    envPaths.push(path.resolve(app.getAppPath(), '.env'));
+    const appPath = app.getAppPath();
+    const resourcesPath = process.resourcesPath;
+    const exePath = app.getPath('exe');
+
+    envPathCandidates.add(path.resolve(appPath, '.env'));
+    envPathCandidates.add(path.resolve(path.dirname(appPath), '.env'));
+    envPathCandidates.add(path.resolve(resourcesPath, '.env'));
+    envPathCandidates.add(path.resolve(path.dirname(resourcesPath), '.env'));
+    envPathCandidates.add(path.resolve(path.dirname(exePath), '.env'));
   } catch {
     // 在部分 Electron 版本 / 生命周期下，getAppPath 在 ready 前可能不可用，避免阻断后续 IPC 注册
   }
+  const envPaths = Array.from(envPathCandidates);
 
   let loadedFrom: string | null = null;
   const parsedKeys: string[] = [];

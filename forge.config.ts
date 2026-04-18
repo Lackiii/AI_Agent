@@ -13,7 +13,10 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({}),
+    // Avoid Squirrel delta generation issues when rebuilding the same app version locally.
+    new MakerSquirrel({
+      noDelta: true,
+    }),
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),
     new MakerDeb({}),

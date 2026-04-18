@@ -6,4 +6,4 @@
 - 架构与模块：**[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)**
 - 人设文件：**[docs/PERSONA.md](./docs/PERSONA.md)**
 - 启动：`npm install` → `npm run start`
-- 环境变量：参考 `.env.example`（`LLM_*`）
+- 环境变量：参考 `.env.example`（`LLM_*`）。若要把本地数据目录放到 E 盘，在 `.env` 中设置 `AI_AGENT_USER_DATA_PATH`（见示例）。

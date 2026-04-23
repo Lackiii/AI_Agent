@@ -43,7 +43,13 @@ def _decode_image_base64(image_base64: str) -> bytes:
     return base64.b64decode(image_b64_clean)
 
 
+def _ocr_force_disabled() -> bool:
+    return os.getenv("DISABLE_PADDLEOCR", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def get_ocr_engine_status() -> dict:
+    if _ocr_force_disabled():
+        return {"available": False, "engine": "PaddleOCR", "error": "disabled by DISABLE_PADDLEOCR"}
     has_paddleocr = importlib.util.find_spec("paddleocr") is not None
     has_paddle = importlib.util.find_spec("paddle") is not None
     if has_paddleocr and has_paddle:
@@ -61,6 +67,8 @@ def run_paddle_ocr(image_base64: str) -> dict:
     Optional OCR via PaddleOCR.
     If PaddleOCR/PaddlePaddle isn't installed in your backend environment, we return "" (interface still works).
     """
+    if _ocr_force_disabled():
+        return {"text": "", "status": "engine_unavailable", "error": "PaddleOCR disabled by environment"}
     try:
         _patch_analysis_config_compat()
         from paddleocr import PaddleOCR  # type: ignore

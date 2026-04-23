@@ -41,9 +41,12 @@ import { restartGreetingScheduler } from '../greeting-scheduler.service';
 import { getDesktopPetSettings, setDesktopPetSettings } from '../pet-settings.service';
 import {
   hideDesktopPetWindow,
+  pushDesktopPetEmotion,
   setDesktopPetWindowSettings,
   showDesktopPetWindow,
 } from '../pet.window';
+import { inferAssistantEmotion } from '../pet-emotion.service';
+import { getWeatherContextMessage } from '../weather-context.service';
 import type { CreateReminderInput, ScreenshotCaptureStartOptions, ScreenshotListFilter } from '../../shared/types/domain';
 import type { GreetingSettingsDTO } from '../../shared/types/greeting';
 import type { ChatMessage } from '../../shared/types/llm';
@@ -381,6 +384,11 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   const messages: ChatMessage[] = [{ role: 'system', content: getEffectivePersona() }];
 
   messages.push({ role: 'system', content: buildLocalDateTimeSystemMessage() });
+  try {
+    messages.push({ role: 'system', content: await getWeatherContextMessage() });
+  } catch {
+    // 天气上下文拉取失败不阻断主对话
+  }
   messages.push({ role: 'system', content: buildConversationTimingContext(historyWithTime) });
   try {
     messages.push({ role: 'system', content: await buildScreenshotContextMessage(trimmed) });
@@ -412,6 +420,7 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
     const finalReply = `${reminderActionText}${reminderSkipPersonaFooter ? '' : personaFooter}${greetingFooter}`;
     flushPendingNotificationsToMemory();
     appendExchange(trimmed, finalReply);
+    pushDesktopPetEmotion(inferAssistantEmotion(trimmed, finalReply));
     return finalReply;
   }
 
@@ -426,6 +435,7 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   flushPendingNotificationsToMemory();
   // 只把主回复写入记忆，避免把操作性 footer 反复带入上下文导致重复。
   appendExchange(trimmed, reply);
+  pushDesktopPetEmotion(inferAssistantEmotion(trimmed, fullReply));
   return fullReply;
 };
 

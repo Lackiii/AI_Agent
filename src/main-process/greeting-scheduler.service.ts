@@ -6,6 +6,7 @@ import { chatCompletion, getLlmConfig } from './llm.service';
 import { appendNotificationTurn } from './memory.service';
 import { getEffectivePersona } from './persona-memory.service';
 import { getGreetingSettings } from './greeting-settings.service';
+import { getWeatherContextMessage } from './weather-context.service';
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -46,9 +47,11 @@ const runGreeting = async (): Promise<void> => {
 
   try {
     const persona = getEffectivePersona();
+    const weatherContext = await getWeatherContextMessage();
     const messages: ChatMessage[] = [
       { role: 'system', content: persona },
       { role: 'system', content: buildLocalDateTimeSystemMessage() },
+      { role: 'system', content: weatherContext },
       {
         role: 'system',
         content:

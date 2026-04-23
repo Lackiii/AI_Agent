@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, screen } from 'electron';
 import path from 'node:path';
 import { loadWindowRoute, openMainWindowToChat } from './window';
 import type { DesktopPetSettingsDTO } from '../shared/types/pet';
+import type { AssistantEmotion } from '../shared/types/emotion';
 
 let petWindowRef: BrowserWindow | null = null;
 const PET_MARGIN = 18;
@@ -91,6 +92,11 @@ export const pushDesktopPetBubble = (text: string): void => {
   const win = createDesktopPetWindow();
   const body = text.replace(/\s+/g, ' ').trim().slice(0, MAX_BUBBLE_LEN);
   win.webContents.send('pet:bubble', body);
+};
+
+export const pushDesktopPetEmotion = (emotion: AssistantEmotion): void => {
+  const win = createDesktopPetWindow();
+  win.webContents.send('pet:emotion', emotion);
 };
 
 export const createDesktopPetWindow = (): BrowserWindow => {

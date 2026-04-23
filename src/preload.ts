@@ -12,6 +12,7 @@ import type { GreetingSettingsDTO } from './shared/types/greeting';
 import type { ChatMessage } from './shared/types/llm';
 import type { VaultReadResult } from './shared/types/vault';
 import type { DesktopPetSettingsDTO } from './shared/types/pet';
+import type { AssistantEmotion } from './shared/types/emotion';
 
 contextBridge.exposeInMainWorld('assistantApi', {
   llm: {
@@ -85,6 +86,13 @@ contextBridge.exposeInMainWorld('assistantApi', {
       ipcRenderer.on('pet:bubble', listener);
       return () => {
         ipcRenderer.removeListener('pet:bubble', listener);
+      };
+    },
+    onEmotion: (callback: (emotion: AssistantEmotion) => void) => {
+      const listener = (_e: unknown, emotion: AssistantEmotion) => callback(emotion);
+      ipcRenderer.on('pet:emotion', listener);
+      return () => {
+        ipcRenderer.removeListener('pet:emotion', listener);
       };
     },
   },

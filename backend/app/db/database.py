@@ -49,7 +49,10 @@ def init_schema() -> None:
               file_path TEXT,
               ocr_text TEXT,
               ocr_status TEXT,
-              ocr_error TEXT
+              ocr_error TEXT,
+              caption TEXT,
+              caption_status TEXT,
+              caption_error TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_screenshots_captured_at
               ON screenshots(captured_at);
@@ -78,6 +81,18 @@ def init_schema() -> None:
             pass
         try:
             conn.execute("ALTER TABLE screenshots ADD COLUMN ocr_error TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE screenshots ADD COLUMN caption TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE screenshots ADD COLUMN caption_status TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE screenshots ADD COLUMN caption_error TEXT")
         except Exception:
             pass
         conn.commit()

@@ -23,7 +23,7 @@ Electron 安全模型下：**渲染进程默认不信任**，敏感能力放在*
 | `assistantApi.persona.reset()` | `persona:reset` | 删除 `assistant-persona.json`，恢复默认人设 |
 | `assistantApi.reminders.list/create/remove` | `reminder:*` | 读写 `reminders.json`（创建时可能同步后端） |
 | `assistantApi.screenshots.list` | `screenshot:list` | 截图记录列表（对接 FastAPI 为主） |
-| `assistantApi.screenshots.captureNow()` | `screenshot:captureNow` | 立即截图并提交 OCR |
+| `assistantApi.screenshots.captureNow()` | `screenshot:captureNow` | 立即截图 → OCR；若配置了 `LLM_VISION_MODEL` 再写画面摘要 |
 | `assistantApi.screenshots.start(options)` | `screenshot:start` | 开启定时截图（`intervalMinutes` + 可选 `windowStart/windowEnd`） |
 | `assistantApi.screenshots.stop()` | `screenshot:stop` | 停止定时截图 |
 | `assistantApi.screenshots.status()` | `screenshot:status` | 获取采集状态（运行中、间隔、窗口、最近截图时间） |
@@ -39,6 +39,7 @@ Electron 安全模型下：**渲染进程默认不信任**，敏感能力放在*
 | `assistantApi.pet.openChat()` | `pet:openChat` | 从桌宠页/托盘唤起主窗口并切到对话页 |
 | `assistantApi.pet.getSettings / setSettings` | `pet:getSettings` / `pet:setSettings` | 读写桌宠设置（开机显示、大小、透明度）；保存后实时生效 |
 | `assistantApi.pet.onBubble(cb)` | （`ipcRenderer.on('pet:bubble')`） | 订阅主进程推送的桌宠气泡文本（通常来自通知联动） |
+| `assistantApi.pet.onEmotion(cb)` | （`ipcRenderer.on('pet:emotion')`） | 订阅桌宠情绪切换（`AssistantEmotion`）；见 [PET_EMOTION.md](./PET_EMOTION.md) |
 | `assistantApi.vault.list()` | `vault:list` | 列出 `ai-vault` 下文件相对路径 |
 | `assistantApi.vault.read(path)` | `vault:read` | 读资料夹内 UTF-8 文本 |
 | `assistantApi.vault.delete(path)` | `vault:delete` | 删除资料夹内指定文件 |

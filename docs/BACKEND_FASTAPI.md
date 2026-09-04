@@ -54,6 +54,7 @@ LLM（用于 `/chat`、以及你后续把“人设抽取/提醒抽取”迁移�
   - 到点触发后会把 `status` 更新为 `fired` 并写入 `fired_at`
 - `screenshots`
   - 保存 `captured_at`、`file_path`（可为空）、`ocr_text`、`ocr_status`、`ocr_error`
+  - 以及可选画面摘要：`caption`、`caption_status`、`caption_error`
 - `persona_override`
   - 保存用户通过对话覆盖的人设内容（只存一份，id=1）
 - `conversation_memory`
@@ -92,7 +93,10 @@ LLM（用于 `/chat`、以及你后续把“人设抽取/提醒抽取”迁移�
     - `imageBase64`（图片 base64，可为 data URL）
     - `capturedAt`（可选，ISO）
     - `filePath`（可选）
-  - 返回：`{id, capturedAt, filePath, ocrText, ocrStatus, ocrError}`
+  - 返回：`{id, capturedAt, filePath, ocrText, ocrStatus, ocrError, caption?, captionStatus?, captionError?}`
+- `PATCH /screenshots/{screenshot_id}/caption`
+  - body：`{ caption?, captionStatus?, captionError? }`
+  - 由 Electron 在视觉摘要完成后回写
 - `GET /screenshots/ocr/status`
   - 返回 OCR 引擎可用性：`{available, engine, error?}`
 
@@ -155,5 +159,16 @@ Electron 端会收到该消息并用系统 `Notification` 弹窗。
 - `/screenshots/ocr` 仍可调用
 - `ocrStatus` 会是 `engine_unavailable`，`ocrText` 为空
 
-待你确认“截图采集方法 A”的具体落地方案后，我可以继续把 Electron 端的采集链路补齐到后端 `/screenshots/ocr` 的完整闭环。
+## 9. 多模态画面摘要（Caption，可选）
+
+采集链路：**截图 → 后端 OCR 入库 → Electron 主进程调用视觉模型写 caption → `PATCH /screenshots/{id}/caption` 回写**。
+
+- OCR 仍是可检索文字底座；caption 是 1～3 句中文场景摘要（应用/在做什么/是否像报错）。
+- 日常对话上下文只注入 `caption` + `ocrText`，**不把原图塞进对话**。
+- Electron 环境变量（见根目录 `.env.example`）：
+  - `LLM_VISION_MODEL`：必填才启用；未配置则 `captionStatus=skipped`
+  - `LLM_VISION_BASE_URL`：缺省回退 `LLM_BASE_URL`
+  - `LLM_VISION_API_KEY`：缺省回退 `LLM_API_KEY`
+- 后端字段：`caption` / `caption_status` / `caption_error`
+- 接口：`PATCH /screenshots/{screenshot_id}/caption`
 

@@ -41,9 +41,15 @@ import { restartGreetingScheduler } from '../greeting-scheduler.service';
 import { getDesktopPetSettings, setDesktopPetSettings } from '../pet-settings.service';
 import {
   hideDesktopPetWindow,
+  pushDesktopPetEmotion,
   setDesktopPetWindowSettings,
   showDesktopPetWindow,
 } from '../pet.window';
+import {
+  buildEmotionInstructionSystemMessage,
+  resolveAssistantEmotion,
+} from '../pet-emotion.service';
+import { getWeatherContextMessage } from '../weather-context.service';
 import type { CreateReminderInput, ScreenshotCaptureStartOptions, ScreenshotListFilter } from '../../shared/types/domain';
 import type { GreetingSettingsDTO } from '../../shared/types/greeting';
 import type { ChatMessage } from '../../shared/types/llm';
@@ -213,7 +219,7 @@ const buildScreenshotContextMessage = async (prompt: string): Promise<string> =>
       ? []
       : rows
           .filter((r) => {
-            const text = `${r.ocrText || ''} ${r.ocrError || ''}`.toLowerCase();
+            const text = `${r.caption || ''} ${r.ocrText || ''} ${r.ocrError || ''}`.toLowerCase();
             return keywords.some((k) => text.includes(k));
           })
           .slice(0, SCREENSHOT_CONTEXT_MATCH_LIMIT);
@@ -225,36 +231,31 @@ const buildScreenshotContextMessage = async (prompt: string): Promise<string> =>
     },
     {} as Record<string, number>,
   );
-  const recentLines = recent.map(
-    (r, i) =>
-      `${i + 1}. ${formatLocalDateTime(r.capturedAt)} | status=${r.ocrStatus || 'unknown'} | ${toTextPreview(r.ocrText)}${
-        r.ocrError ? ` | err=${toTextPreview(r.ocrError, 60)}` : ''
-      }`,
-  );
-  const matchedLines = matched.map(
-    (r, i) =>
-      `${i + 1}. ${formatLocalDateTime(r.capturedAt)} | status=${r.ocrStatus || 'unknown'} | ${toTextPreview(r.ocrText)}${
-        r.ocrError ? ` | err=${toTextPreview(r.ocrError, 60)}` : ''
-      }`,
-  );
+  const formatRowLine = (r: (typeof rows)[number], i: number): string =>
+    `${i + 1}. ${formatLocalDateTime(r.capturedAt)} | ocr=${r.ocrStatus || 'unknown'} | caption=${
+      r.captionStatus || 'unknown'
+    } | ${toTextPreview(r.caption) || toTextPreview(r.ocrText) || '（无摘要）'}${
+      r.ocrError ? ` | err=${toTextPreview(r.ocrError, 60)}` : ''
+    }`;
+  const recentLines = recent.map((r, i) => formatRowLine(r, i));
+  const matchedLines = matched.map((r, i) => formatRowLine(r, i));
 
-  // Provide longer OCR snippets for better grounding (still capped to avoid blowing up context).
-  const matchedSnippets = matched
-    .map((r, i) => {
-      const snip = toTextSnippet(r.ocrText, SCREENSHOT_CONTEXT_MATCH_SNIPPET_MAX_LEN);
-      if (!snip) return null;
-      return `${i + 1}. ${formatLocalDateTime(r.capturedAt)}\n${snip}`;
-    })
-    .filter(Boolean) as string[];
+  // Prefer multimodal caption snippets; fall back to OCR text.
+  const buildSnippets = (list: typeof rows, maxLen: number): string[] =>
+    list
+      .map((r, i) => {
+        const caption = toTextSnippet(r.caption, maxLen);
+        const ocr = toTextSnippet(r.ocrText, maxLen);
+        if (!caption && !ocr) return null;
+        const parts = [`${i + 1}. ${formatLocalDateTime(r.capturedAt)}`];
+        if (caption) parts.push(`画面摘要：${caption}`);
+        if (ocr) parts.push(`OCR：${ocr}`);
+        return parts.join('\n');
+      })
+      .filter(Boolean) as string[];
 
-  const recentSnippets = recent
-    .slice(0, 2)
-    .map((r, i) => {
-      const snip = toTextSnippet(r.ocrText, SCREENSHOT_CONTEXT_RECENT_SNIPPET_MAX_LEN);
-      if (!snip) return null;
-      return `${i + 1}. ${formatLocalDateTime(r.capturedAt)}\n${snip}`;
-    })
-    .filter(Boolean) as string[];
+  const matchedSnippets = buildSnippets(matched, SCREENSHOT_CONTEXT_MATCH_SNIPPET_MAX_LEN);
+  const recentSnippets = buildSnippets(recent.slice(0, 2), SCREENSHOT_CONTEXT_RECENT_SNIPPET_MAX_LEN);
   const statusText = Object.entries(statusCounter)
     .map(([k, v]) => `${k}:${v}`)
     .join(', ');
@@ -263,14 +264,16 @@ const buildScreenshotContextMessage = async (prompt: string): Promise<string> =>
     `- 记录总数：${rows.length}`,
     `- OCR 状态分布：${statusText || 'unknown:0'}`,
     `- 用户问题关键词：${keywords.length ? keywords.join(', ') : '无'}`,
-    '- 最近截图（按时间倒序）：',
+    '- 最近截图（按时间倒序；优先画面摘要，其次 OCR）：',
     ...recentLines,
     ...(matchedLines.length
       ? ['- 与当前问题相关的截图命中：', ...matchedLines]
       : ['- 与当前问题相关的截图命中：无']),
-    ...(matchedSnippets.length ? ['- 命中截图的 OCR 原文片段（截断版）：', ...matchedSnippets] : []),
-    ...(matchedSnippets.length === 0 && recentSnippets.length ? ['- 最近截图的 OCR 原文片段（截断版）：', ...recentSnippets] : []),
-    '当用户问“我刚刚在做什么/报错是什么/哪一步失败”时，优先基于以上截图轨迹回答；若证据不足请明确说明不确定。',
+    ...(matchedSnippets.length ? ['- 命中截图的画面摘要/OCR 片段（截断版）：', ...matchedSnippets] : []),
+    ...(matchedSnippets.length === 0 && recentSnippets.length
+      ? ['- 最近截图的画面摘要/OCR 片段（截断版）：', ...recentSnippets]
+      : []),
+    '当用户问“我刚刚在做什么/报错是什么/哪一步失败”时，优先基于以上画面摘要与 OCR 轨迹回答；若证据不足请明确说明不确定。',
     '若最近截图反复出现 error/exception/fail/traceback 等信息，可在回复中主动给出简短排查建议（1-3 条）。',
   ].join('\n');
 };
@@ -381,6 +384,11 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
   const messages: ChatMessage[] = [{ role: 'system', content: getEffectivePersona() }];
 
   messages.push({ role: 'system', content: buildLocalDateTimeSystemMessage() });
+  try {
+    messages.push({ role: 'system', content: await getWeatherContextMessage() });
+  } catch {
+    // 天气上下文拉取失败不阻断主对话
+  }
   messages.push({ role: 'system', content: buildConversationTimingContext(historyWithTime) });
   try {
     messages.push({ role: 'system', content: await buildScreenshotContextMessage(trimmed) });
@@ -394,8 +402,9 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
 1) vault_list / vault_read / vault_write / vault_delete：只能访问本机用户资料目录下的 AI 资料夹（其它路径一律不可用）。资料夹绝对路径：${getVaultRootPath()}。用户让你保存随笔/笔记/草稿时，必须用 vault_write 写入完整正文；未调用工具则视为未保存。用户明确要求删除资料夹内某个已存文件时，用 vault_delete。
 2) notification_show：立刻弹出一条系统通知（Toast），且正文会写入对话记忆（用户可在「对话历史」看到），便于你记得自己刚通过弹窗说过什么。用户要求「马上/立即弹窗或通知测试」等必须调用；参数 body 为通知正文。
 3) greeting_update：控制「定时主动问候」（到点发系统通知、一两句关心话，用户未发消息也会触发）。用户希望每隔一段时间被提醒休息、喝水、陪聊、写代码间歇等，须调用本工具开启并设定间隔（如半小时用 interval_mode=30m，或 interval_minutes=30）；用户说下班、明天见、再见、不用提醒、关掉问候等，须设 enabled=false。若用户只是描述需求，你应在回复中确认已生效（并实际调用工具）。
-4) screenshot_search：检索截图轨迹（OCR 摘要/报错/时间），用于回答“我刚刚在做什么”“刚才什么报错”“从什么时候开始失败”等问题。遇到这类请求，应优先调用该工具再回答；证据不足时要明确说明。工具返回里含 timeline（时间线摘要）与 statusSummary（状态汇总），请优先引用它们组织回答。`,
+4) screenshot_search：检索截图轨迹（画面摘要 caption / OCR 摘要/报错/时间），用于回答“我刚刚在做什么”“刚才什么报错”“从什么时候开始失败”等问题。遇到这类请求，应优先调用该工具再回答；证据不足时要明确说明。工具返回里含 timeline（时间线摘要）与 statusSummary（状态汇总），请优先引用它们组织回答。`,
   });
+  messages.push({ role: 'system', content: buildEmotionInstructionSystemMessage() });
 
   if (reminderOutcome === 'created') {
     messages.push({
@@ -409,9 +418,11 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
 
   // 仅在“重复/过时”场景短路，避免把固定文案夹杂进主回复里。
   if (reminderShouldShortReply) {
-    const finalReply = `${reminderActionText}${reminderSkipPersonaFooter ? '' : personaFooter}${greetingFooter}`;
+    const resolved = resolveAssistantEmotion(trimmed, reminderActionText);
+    const finalReply = `${resolved.cleanReply}${reminderSkipPersonaFooter ? '' : personaFooter}${greetingFooter}`;
     flushPendingNotificationsToMemory();
     appendExchange(trimmed, finalReply);
+    pushDesktopPetEmotion(resolved.emotion);
     return finalReply;
   }
 
@@ -422,10 +433,12 @@ const handleLlmChat = async (_event: IpcMainInvokeEvent, prompt: string) => {
     takePendingNotifications();
     throw e;
   }
-  const fullReply = `${reply}${reminderSkipPersonaFooter ? '' : personaFooter}${reminderActionText}${greetingFooter}`;
+  const resolved = resolveAssistantEmotion(trimmed, reply);
+  const fullReply = `${resolved.cleanReply}${reminderSkipPersonaFooter ? '' : personaFooter}${reminderActionText}${greetingFooter}`;
   flushPendingNotificationsToMemory();
-  // 只把主回复写入记忆，避免把操作性 footer 反复带入上下文导致重复。
-  appendExchange(trimmed, reply);
+  // 只把主回复写入记忆（去掉情绪标记），避免把操作性 footer 反复带入上下文导致重复。
+  appendExchange(trimmed, resolved.cleanReply);
+  pushDesktopPetEmotion(resolved.emotion);
   return fullReply;
 };
 

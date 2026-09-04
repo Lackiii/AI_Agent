@@ -177,7 +177,9 @@ export const ScreenshotsPage = () => {
 
   const normalizedKeyword = keyword.trim().toLowerCase();
   const filteredRows = normalizedKeyword
-    ? rows.filter((r) => (r.ocrText || '').toLowerCase().includes(normalizedKeyword))
+    ? rows.filter((r) =>
+        `${r.caption || ''} ${r.ocrText || ''} ${r.ocrError || ''}`.toLowerCase().includes(normalizedKeyword),
+      )
     : rows;
   const getOcrStatusLabel = (record: ScreenshotRecord): string => {
     if (record.ocrStatus === 'ok') return '识别成功';
@@ -381,7 +383,19 @@ export const ScreenshotsPage = () => {
                       <Tag color={getOcrStatusColor(r)} style={{ width: 'fit-content' }}>
                         {getOcrStatusLabel(r)}
                       </Tag>
+                      {r.captionStatus ? (
+                        <Tag style={{ width: 'fit-content' }}>
+                          画面摘要：
+                          {r.captionStatus === 'ok'
+                            ? '已生成'
+                            : r.captionStatus === 'skipped'
+                              ? '已跳过'
+                              : '失败'}
+                        </Tag>
+                      ) : null}
+                      {r.caption ? <Text>摘要：{r.caption}</Text> : null}
                       <Text>{r.ocrText || '（无 OCR 文本）'}</Text>
+                      {r.captionError ? <Text type="secondary">摘要备注：{r.captionError}</Text> : null}
                       {r.ocrError ? <Text type="danger">错误：{r.ocrError}</Text> : null}
                       {r.filePath ? <Text type="secondary">文件：{r.filePath}</Text> : null}
                     </Space>

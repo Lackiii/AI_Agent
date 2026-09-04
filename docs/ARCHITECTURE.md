@@ -12,8 +12,8 @@
 | AI 资料夹（随笔/笔记） | `src/main-process/ai-vault.service.ts`、`vault:*` IPC | 数据在 `userData/ai-vault/` 下；模型工具 **`vault_list` / `vault_read` / `vault_write` / `vault_delete`**（见 `llm.service.ts` + `runVaultTool`）。前端对话页可查看列表、预览、**删除**文件（与工具删除共用同一套路径校验）。 |
 | 提醒记录 | `src/main-process/reminder.service.ts`、`reminder:*` IPC | 本地 `userData/reminders.json`，前端 `src/renderer/features/reminders/`。对话中含「提醒」等关键词时，主进程会通过 `reminder-extract.service.ts` 调用 LLM 抽取事项与时间并自动 `createReminder`。 |
 | 定时问候 + 通知 | `greeting-settings.service.ts`、`greeting-scheduler.service.ts`、`greeting-notification.service.ts`、`greeting-tool.service.ts` | 设置存 `greeting-settings.json`；到点或用户通过工具 **`greeting_update`** 调整间隔。可调用 **`notification_show`** 立即弹出系统通知。测试通知 IPC 见下文 `greeting:testNotification`（在 `bootstrap.ts` 注册）。 |
-| 定时截图 + OCR + 轨迹检索 | `src/main-process/screenshot.service.ts`、`screenshot:*` IPC | 已支持立即截图、定时采集（窗口/间隔，开启后窗口内会先立即采集一次）、**交互式框选 OCR 裁剪范围**（避免浏览器标签栏/地址栏噪声）、OCR 状态可观测、单条/全部删除；后端异常时可回退本地内存记录并与后端列表合并展示。对话链路接入 `screenshot_search` 工具用于“基于截图证据回答”，时间线按本地时间组织。 |
-| 桌宠 + 托盘联动 | `src/main-process/pet.window.ts`、`tray.service.ts`、`pet-settings.service.ts`、`pet:*` IPC | 透明桌宠窗口（可拖拽、右键菜单、气泡提示）+ 系统托盘入口（显示/隐藏桌宠、打开对话）。设置持久化到 `desktop-pet-settings.json`，支持开机显示、大小、透明度。 |
+| 定时截图 + OCR + 轨迹检索 | `src/main-process/screenshot.service.ts`、`vision-caption.service.ts`、`screenshot:*` IPC | 已支持立即截图、定时采集、框选裁剪、OCR、可选多模态 **caption**（`LLM_VISION_*`）；对话注入摘要+OCR，`screenshot_search` 可按二者检索。 |
+| 桌宠 + 托盘联动 | `pet.window.ts`、`tray.service.ts`、`pet-emotion.service.ts`、`pet:*` IPC | 透明桌宠 + 托盘；情绪由对话 LLM 尾标 `[[emotion:…\|强度]]` + 轻量状态机驱动，关键词仅作强制调试通道。 |
 | 前端界面 | `src/renderer/` | React + TypeScript + `react-router-dom`（Hash 路由）+ **Ant Design**（`ConfigProvider` 主题、`Layout`/`Menu`/`Card` 等，见 `docs/llms.txt` 索引）。含**对话历史**页、**定时问候设置**侧栏抽屉等。 |
 
 ## 目录结构（摘要）
@@ -30,8 +30,11 @@ src/
     ai-vault.service.ts        # AI 资料夹目录 list/read/write/delete + runVaultTool
     datetime-context.ts        # 注入当前本地时间 system 片段（对话用）
     reminder.service.ts        # 提醒持久化
-    screenshot.service.ts      # 截图轨迹（采集/删除/OCR状态/检索工具执行）
-    pet.window.ts              # 桌宠窗口（透明、拖拽、右键菜单、气泡）
+    screenshot.service.ts      # 截图轨迹（采集/删除/OCR/caption/检索工具）
+    vision-caption.service.ts  # 可选多模态画面摘要（LLM_VISION_*）
+    weather-context.service.ts # 天气上下文（问候/对话）
+    pet.window.ts              # 桌宠窗口（透明、拖拽、右键菜单、气泡/情绪）
+    pet-emotion.service.ts     # 桌宠情绪判定（LLM 尾标 + 状态机）
     tray.service.ts            # 系统托盘（打开对话、显示/隐藏桌宠、退出）
     pet-settings.service.ts    # 桌宠设置持久化（开机显示/大小/透明度）
     greeting-*.service.ts      # 定时问候、通知、工具调度等
@@ -41,9 +44,10 @@ src/
     main.tsx                   # React 挂载
     App.tsx                    # 路由
     layout/AppShell.tsx        # 主导航、问候设置抽屉
-    features/                  # 按业务拆页面（chat / chat-history / reminders …）
+    features/                  # 按业务拆页面（chat / chat-history / reminders / pet / screenshots …）
     features/chat/ChatPage.css # 资料列表行悬停显示删除等样式
-  shared/types/                # 前后端共享类型（领域模型）
+    assets/                    # 桌宠多情绪立绘（angry/happy/usual…）
+  shared/types/                # 前后端共享类型（含 emotion、ScreenshotRecord.caption）
   config/persona.ts            # 性格 / 人设
 ```
 
@@ -64,9 +68,10 @@ src/
 - `greeting:getSettings` / `greeting:setSettings`：定时问候开关与间隔；保存后会重启主进程内调度。
 - `greeting:testNotification`：立即发送一条测试系统通知（设置抽屉内按钮）。
 - `pet:getSettings` / `pet:setSettings`：桌宠设置读写（开机显示、大小、透明度）；保存后实时作用于桌宠窗口。
+- 主进程可向桌宠窗口推送 `pet:bubble`（气泡）与 `pet:emotion`（表情）；详见 [PET_EMOTION.md](./PET_EMOTION.md)。
 - `reminder:list` | `reminder:create` | `reminder:delete`
 - `screenshot:list`：截图记录列表（优先读 FastAPI 后端）。
-- `screenshot:captureNow`：立即截图并提交 OCR。
+- `screenshot:captureNow`：立即截图并提交 OCR；若配置了 `LLM_VISION_MODEL`，再生成画面摘要并回写。
 - `screenshot:start` / `screenshot:stop` / `screenshot:status`：定时采集开关与状态。
 - `screenshot:ocrStatus`：OCR 引擎可用性状态。
 - `screenshot:delete` / `screenshot:deleteAll`：删除单条或全部截图记录。

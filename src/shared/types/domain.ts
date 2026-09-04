@@ -19,6 +19,10 @@ export type ScreenshotRecord = {
   ocrText?: string;
   ocrStatus?: 'ok' | 'no_text' | 'engine_unavailable' | 'ocr_error' | 'backend_unreachable' | 'unknown';
   ocrError?: string;
+  /** 多模态视觉模型生成的短画面摘要（可选） */
+  caption?: string;
+  captionStatus?: 'ok' | 'skipped' | 'error';
+  captionError?: string;
 };
 
 export type CreateReminderInput = {

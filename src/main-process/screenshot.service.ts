@@ -6,6 +6,7 @@ import type {
   ScreenshotListFilter,
   ScreenshotRecord,
 } from '../shared/types/domain';
+import { captionScreenshotImage } from './vision-caption.service';
 
 /**
  * 开题报告中的「定时截图 + OCR + 轨迹检索」占位实现。
@@ -50,7 +51,19 @@ export const listScreenshots = async (filter?: ScreenshotListFilter): Promise<Sc
     const data = (await res.json()) as ScreenshotRecord[];
     const mergedById = new Map<string, ScreenshotRecord>();
     for (const local of inMemoryTrail) mergedById.set(local.id, local);
-    for (const remote of data) mergedById.set(remote.id, remote);
+    for (const remote of data) {
+      const local = mergedById.get(remote.id);
+      if (local && !remote.caption && local.caption) {
+        mergedById.set(remote.id, {
+          ...remote,
+          caption: local.caption,
+          captionStatus: local.captionStatus ?? remote.captionStatus,
+          captionError: local.captionError ?? remote.captionError,
+        });
+      } else {
+        mergedById.set(remote.id, remote);
+      }
+    }
     return applyFilterAndSort([...mergedById.values()]);
   } catch {
     return applyFilterAndSort([...inMemoryTrail]);
@@ -115,6 +128,26 @@ const postScreenshotOcr = async (imageBase64: string, capturedAt: string): Promi
     throw new Error(`backend error: ${res.status}`);
   }
   return (await res.json()) as ScreenshotRecord;
+};
+
+const patchScreenshotCaption = async (
+  screenshotId: string,
+  caption: string | undefined,
+  captionStatus: ScreenshotRecord['captionStatus'],
+  captionError?: string,
+): Promise<ScreenshotRecord | null> => {
+  const baseUrl = getBackendBaseUrl().replace(/\/$/, '');
+  try {
+    const res = await fetch(`${baseUrl}/screenshots/${encodeURIComponent(screenshotId)}/caption`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caption, captionStatus, captionError }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as ScreenshotRecord;
+  } catch {
+    return null;
+  }
 };
 
 export const getOcrEngineStatus = async (): Promise<OcrEngineStatus> => {
@@ -187,8 +220,26 @@ export const captureScreenshotNow = async (): Promise<ScreenshotRecord> => {
   try {
     const imageBase64 = await capturePrimaryScreenAsDataUrl();
     const saved = await postScreenshotOcr(imageBase64, capturedAt);
-    captureStatus = { ...captureStatus, lastCapturedAt: saved.capturedAt || capturedAt };
-    return saved;
+    const vision = await captionScreenshotImage(imageBase64);
+    const withCaption: ScreenshotRecord = {
+      ...saved,
+      caption: vision.caption,
+      captionStatus: vision.captionStatus,
+      captionError: vision.captionError,
+    };
+    const patched = await patchScreenshotCaption(
+      saved.id,
+      vision.caption,
+      vision.captionStatus,
+      vision.captionError,
+    );
+    const finalRecord = patched ?? withCaption;
+    // Keep a local copy so list merge still sees caption if PATCH fails transiently.
+    const localIdx = inMemoryTrail.findIndex((r) => r.id === finalRecord.id);
+    if (localIdx >= 0) inMemoryTrail[localIdx] = finalRecord;
+    else inMemoryTrail.push(finalRecord);
+    captureStatus = { ...captureStatus, lastCapturedAt: finalRecord.capturedAt || capturedAt };
+    return finalRecord;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     const fallback: ScreenshotRecord = {
@@ -197,6 +248,8 @@ export const captureScreenshotNow = async (): Promise<ScreenshotRecord> => {
       ocrText: '',
       ocrStatus: 'backend_unreachable',
       ocrError: reason ? `截图或 OCR 失败：${reason}` : '截图或 OCR 失败',
+      captionStatus: 'skipped',
+      captionError: '截图/OCR 失败，未生成画面摘要',
     };
     inMemoryTrail.push(fallback);
     captureStatus = { ...captureStatus, lastCapturedAt: capturedAt };
@@ -312,7 +365,7 @@ export const runScreenshotTool = async (name: string, argsJson: string): Promise
     }
     if (keyword) {
       rows = rows.filter((r) => {
-        const haystack = `${r.ocrText || ''} ${r.ocrError || ''} ${r.filePath || ''}`.toLowerCase();
+        const haystack = `${r.caption || ''} ${r.ocrText || ''} ${r.ocrError || ''} ${r.filePath || ''}`.toLowerCase();
         return haystack.includes(keyword);
       });
     }
@@ -321,15 +374,17 @@ export const runScreenshotTool = async (name: string, argsJson: string): Promise
       capturedAt: r.capturedAt,
       capturedAtLocal: formatLocalDateTime(r.capturedAt),
       ocrStatus: r.ocrStatus || 'unknown',
+      captionStatus: r.captionStatus || 'unknown',
+      captionPreview: toPreview(r.caption, 160),
       ocrTextPreview: toPreview(r.ocrText),
       ocrErrorPreview: toPreview(r.ocrError, 80),
       filePath: r.filePath || '',
     }));
     const timeline = picked.map(
       (x, i) =>
-        `${i + 1}) ${x.capturedAtLocal} | ${x.ocrStatus} | ${x.ocrTextPreview || '（无 OCR 文本）'}${
-          x.ocrErrorPreview ? ` | err=${x.ocrErrorPreview}` : ''
-        }`,
+        `${i + 1}) ${x.capturedAtLocal} | ocr=${x.ocrStatus} | caption=${x.captionStatus} | ${
+          x.captionPreview || x.ocrTextPreview || '（无画面摘要/OCR）'
+        }${x.ocrErrorPreview ? ` | err=${x.ocrErrorPreview}` : ''}`,
     );
     const statusCounter = rows.reduce(
       (acc, r) => {

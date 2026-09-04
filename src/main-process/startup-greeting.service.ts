@@ -8,6 +8,7 @@ import {
   longHolidayStrictlyBetween,
   toLocalYmd,
 } from './china-long-holidays';
+import { getWeatherContextMessage } from './weather-context.service';
 
 const TITLE = '拉文杜拉';
 const USER_NICK = '主人';
@@ -228,9 +229,11 @@ export const runStartupGreetingIfNeeded = async (): Promise<void> => {
         isWeekendToday: isWeekendLocal(now),
       });
 
+      const weatherContext = await getWeatherContextMessage();
       const raw = await chatCompletion(
         [
-          { role: 'system', content: system },
+          { role: 'system', content: `${system}\n补充要求：若存在高温/雷暴预警，可在问候中自然加入一句提醒（仍保持简短）。` },
+          { role: 'system', content: weatherContext },
           { role: 'user', content: user },
         ],
         { temperature: 0.55 },

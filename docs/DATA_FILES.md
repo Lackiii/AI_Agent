@@ -32,7 +32,7 @@
 
 当后端 FastAPI 启用时，截图轨迹写入 `backend_data/app.sqlite3`（`screenshots` 表）：
 
-- 关键字段：`captured_at`、`ocr_text`、`ocr_status`、`ocr_error`
+- 关键字段：`captured_at`、`ocr_text`、`ocr_status`、`ocr_error`、`caption`、`caption_status`、`caption_error`
 - 前端「截图轨迹」页的**单条删除**与**一键删除**会通过后端接口删除对应记录
 - 后端不可用时，主进程会回退到内存记录（重启后不保留）；当前列表会合并展示后端与本地兜底记录，避免短时异常导致“记录消失”
 

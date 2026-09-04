@@ -128,8 +128,8 @@ const SCREENSHOT_SEARCH_TOOL = {
   type: 'function' as const,
   function: {
     name: 'screenshot_search',
-    description:
-      '检索截图轨迹（按关键词、时间范围与 OCR 状态过滤），返回命中的截图时间与 OCR 摘要。适用于回答“我刚刚做了什么/哪里报错/什么时候开始失败”等问题。',
+      description:
+        '检索截图轨迹（按关键词、时间范围与 OCR 状态过滤），返回命中的截图时间、画面摘要（caption）与 OCR 摘要。适用于回答“我刚刚做了什么/哪里报错/什么时候开始失败”等问题。',
     parameters: {
       type: 'object',
       properties: {

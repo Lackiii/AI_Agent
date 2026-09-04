@@ -23,9 +23,12 @@
 | `src/main-process/persona-extract.service.ts` | 用 LLM 从用户话里抽「新人设」 | 改触发关键词、system 提示词、JSON 字段 |
 | `src/main-process/reminder.service.ts` | 提醒 CRUD → `reminders.json`（同时 best-effort 同步后端） | 改存储结构、以后换 SQLite 可整文件替换实现 |
 | `src/main-process/reminder-extract.service.ts` | 从对话抽提醒并自动创建 | 改关键词、抽取提示词 |
-| `src/main-process/screenshot.service.ts` | 截图采集/列表/删除/OCR状态与截图工具执行 | 改采集策略（窗口/间隔/裁剪范围）、OCR 状态汇总、检索返回字段 |
+| `src/main-process/screenshot.service.ts` | 截图采集/列表/删除/OCR/caption 回写与截图工具执行 | 改采集策略、检索返回字段、与视觉摘要衔接 |
+| `src/main-process/vision-caption.service.ts` | OpenAI 兼容视觉 API 生成画面摘要（`LLM_VISION_*`） | 改提示词、跳过条件、超时 |
+| `src/main-process/weather-context.service.ts` | 对话/问候用天气上下文（Open-Meteo） | 改城市/经纬度环境变量 |
 | `src/main-process/region-picker.window.ts` | 全屏透明选框窗口（框选截图裁剪范围） | 选框结果会写入截图采集状态，用于裁剪后再 OCR |
-| `src/main-process/pet.window.ts` | 桌宠窗口（透明、置顶、可拖拽、右键菜单、气泡推送） | 改默认位置、拖拽热区、右键菜单项 |
+| `src/main-process/pet.window.ts` | 桌宠窗口（透明、置顶、可拖拽、右键菜单、气泡/情绪推送） | 改默认位置、拖拽热区、右键菜单项 |
+| `src/main-process/pet-emotion.service.ts` | 桌宠情绪：LLM 尾标解析、强制指令、状态机 | 改标签格式、冷却/强度阈值；详见 [PET_EMOTION.md](./PET_EMOTION.md) |
 | `src/main-process/pet-settings.service.ts` | 桌宠设置 `desktop-pet-settings.json` 读写 | 改默认值、范围约束（大小/透明度） |
 | `src/main-process/tray.service.ts` | 系统托盘（打开对话、显示/隐藏桌宠、退出） | 改托盘菜单、双击行为 |
 | `src/main-process/greeting-settings.service.ts` | `greeting-settings.json` 读写 | 改默认间隔枚举 |
@@ -41,8 +44,9 @@
 **统一注册处：** `src/main-process/ipc/register.ts`（另见 **`bootstrap.ts`** 中 `greeting:testNotification` / `pet:openChat`）。
 
 - 绝大多数 `ipcMain.handle('xxx', …)` 在 `register.ts`。
-- **`handleLlmChat` 顺序很重要**：先 `tryResetPersonaFromUserPhrase` → 再人设抽取保存 → 再提醒抽取 → 再拼 system（含本地时间 + 对话时间间隔上下文 + 截图轨迹上下文）→ 主对话 → 拼接 footer。
+- **`handleLlmChat` 顺序很重要**：先 `tryResetPersonaFromUserPhrase` → 再人设抽取保存 → 再提醒抽取 → 再拼 system（含本地时间 + 天气 + 对话时间间隔 + 截图轨迹 + 情绪尾标说明）→ 主对话 → 剥掉 `[[emotion:…]]` → 推桌宠表情 → 拼接 footer。
 - 桌宠设置 IPC：`pet:getSettings` / `pet:setSettings`，保存后会实时同步到桌宠窗口（大小/透明度/显示状态）。
+- 桌宠情绪细节见 [PET_EMOTION.md](./PET_EMOTION.md)。
 
 要**改对话行为**（例如少调一次 LLM、改 footer 文案）：主要改这个文件 + 上面对应 `*-extract.service.ts`。
 

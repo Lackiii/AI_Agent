@@ -11,6 +11,7 @@ import type { GreetingSettingsDTO } from '../shared/types/greeting';
 import type { ChatMessage } from '../shared/types/llm';
 import type { VaultReadResult } from '../shared/types/vault';
 import type { DesktopPetSettingsDTO } from '../shared/types/pet';
+import type { AssistantEmotion } from '../shared/types/emotion';
 
 export {};
 
@@ -65,6 +66,7 @@ declare global {
         getSettings: () => Promise<DesktopPetSettingsDTO>;
         setSettings: (patch: Partial<DesktopPetSettingsDTO>) => Promise<DesktopPetSettingsDTO>;
         onBubble: (callback: (text: string) => void) => () => void;
+        onEmotion: (callback: (emotion: AssistantEmotion) => void) => () => void;
       };
     };
     /** @deprecated 请使用 assistantApi.llm.chat */

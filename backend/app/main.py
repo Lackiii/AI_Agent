@@ -14,6 +14,7 @@ from app.db.screenshots_repo import (
     delete_all_screenshot_records,
     delete_screenshot_record,
     list_screenshots,
+    update_screenshot_caption,
 )
 from app.db.persona_repo import get_effective_persona, reset_persona_override, save_persona_override
 from app.db.memory_repo import append_exchange, clear_conversation_memory, get_recent_exchanges
@@ -53,6 +54,12 @@ class OcrScreenshotRequest(BaseModel):
     imageBase64: str
     capturedAt: Optional[str] = None
     filePath: Optional[str] = None
+
+
+class UpdateScreenshotCaptionRequest(BaseModel):
+    caption: Optional[str] = None
+    captionStatus: Optional[str] = None
+    captionError: Optional[str] = None
 
 
 class PersonaOverrideRequest(BaseModel):
@@ -154,6 +161,19 @@ async def ocr_screenshot(req: OcrScreenshotRequest) -> dict:
         ocr_error=ocr_result.get("error"),
     )
     return record
+
+
+@app.patch("/screenshots/{screenshot_id}/caption")
+async def patch_screenshot_caption(screenshot_id: str, req: UpdateScreenshotCaptionRequest) -> dict:
+    updated = update_screenshot_caption(
+        screenshot_id=screenshot_id,
+        caption=req.caption,
+        caption_status=req.captionStatus,
+        caption_error=req.captionError,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="screenshot not found")
+    return updated
 
 
 @app.get("/screenshots/ocr/status")
